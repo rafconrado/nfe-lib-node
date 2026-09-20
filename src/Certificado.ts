@@ -1,14 +1,9 @@
 import https from 'https';
 
 export class Certificado {
-  private pfxBuffer: Buffer;
-  private password?: string;
+  public pfxBuffer: Buffer;
+  public password?: string;
 
-  /**
-   * Inicializa o certificado digital A1.
-   * @param pfxBuffer O Buffer do arquivo .pfx lido (ex: fs.readFileSync('cert.pfx'))
-   * @param password A senha do certificado (opcional, dependendo do certificado)
-   */
   constructor(pfxBuffer: Buffer, password?: string) {
     this.pfxBuffer = pfxBuffer;
     this.password = password;

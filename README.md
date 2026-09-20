@@ -25,26 +25,46 @@ import { NFe, Certificado } from 'nfe-lib-node';
 import fs from 'fs';
 
 async function testarSefaz() {
-  // Carregue seu certificado físico
-  const certificado = new Certificado(
-    fs.readFileSync('./certificado.pfx'),
-    'SENHA_DO_CERTIFICADO'
-  );
+  const certificado = new Certificado(fs.readFileSync('./certificado.pfx'), 'SENHA_DO_CERTIFICADO');
+  const nfe = new NFe({ uf: 'DF', ambiente: 'homologacao', certificado });
 
-  // Inicialize a biblioteca para o seu Estado
-  const nfe = new NFe({
-    uf: 'DF', 
-    ambiente: 'homologacao', // 'homologacao' ou 'producao'
-    certificado: certificado
-  });
-
-  // Consulte se os servidores da Sefaz estão online
   const status = await nfe.consultarStatus();
-  console.log(status);
+  console.log(status.xml);
 }
+```
+
+### 2. Emitir uma NF-e (Autorização)
+
+A biblioteca foca na infraestrutura (Assinatura XMLDSig e SOAP). Você fornece um objeto com a estrutura da SEFAZ, e a biblioteca cuida da dor de cabeça da criptografia:
+
+```typescript
+import { NFe, Certificado, DadosNFe } from 'nfe-lib-node';
+import fs from 'fs';
+
+async function emitirNota() {
+  const certificado = new Certificado(fs.readFileSync('./certificado.pfx'), 'SENHA_DO_CERTIFICADO');
+  const nfe = new NFe({ uf: 'DF', ambiente: 'homologacao', certificado });
+
+  const nota: DadosNFe = {
+    infNFe: {
+      '@Id': 'NFe5326...',
+      '@versao': '4.00',
+      ide: { /* ... */ },
+      emit: { /* ... */ },
+      dest: { /* ... */ },
+      det: { /* ... */ },
+      total: { /* ... */ },
+      transp: { /* ... */ },
+      pag: { /* ... */ }
+    }
+  };
+
+  const resposta = await nfe.emitir(nota);
+  console.log(resposta.xml); // Autorizado!
+}
+```
 
 testarSefaz();
-```
 
 ## 🛡️ Segurança
 

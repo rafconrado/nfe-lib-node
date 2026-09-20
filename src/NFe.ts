@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { Certificado } from './Certificado';
+import { Assinador } from './Assinador';
+import { create } from 'xmlbuilder2';
+import { DadosNFe, RetornoSefaz } from './types';
 
 export type AmbienteSefaz = 'producao' | 'homologacao';
 
@@ -11,76 +14,93 @@ export interface ConfiguracaoNFe {
 
 export class NFe {
   private config: ConfiguracaoNFe;
+  private assinador: Assinador;
 
   constructor(config: ConfiguracaoNFe) {
     this.config = config;
+    this.assinador = new Assinador(config.certificado.pfxBuffer, config.certificado.password);
   }
 
-  /**
-   * Obtém a URL base do WebService da SEFAZ dependendo do estado (UF) e ambiente.
-   * Obs: Esta é uma simplificação inicial apontando para SVRS (atende DF, etc).
-   * Em uma versão completa, haveria um mapeador complexo de UFs para URLs.
-   */
-  private getStatusServicoUrl(): string {
-    if (this.config.ambiente === 'homologacao') {
-      // SVRS Homologação (Atende DF, RS, etc)
-      return 'https://nfe-homologacao.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx';
+  private getUrl(servico: 'status' | 'autorizacao'): string {
+    // SVRS (Atende DF, RS, etc)
+    const baseUrl = this.config.ambiente === 'homologacao' 
+      ? 'https://nfe-homologacao.svrs.rs.gov.br/ws'
+      : 'https://nfe.svrs.rs.gov.br/ws';
+
+    if (servico === 'status') {
+      return `${baseUrl}/NfeStatusServico/NfeStatusServico4.asmx`;
     }
-    // SVRS Produção
-    return 'https://nfe.svrs.rs.gov.br/ws/NfeStatusServico/NfeStatusServico4.asmx';
+    if (servico === 'autorizacao') {
+      return `${baseUrl}/NfeAutorizacao/NFeAutorizacao4.asmx`;
+    }
+    throw new Error('Serviço desconhecido');
   }
 
-  /**
-   * Obtém o código do IBGE referente à UF.
-   */
   private getCodigoUF(): string {
-    const ufs: Record<string, string> = {
-      'DF': '53',
-      // Adicionar outras futuramente...
-    };
+    const ufs: Record<string, string> = { 'DF': '53' };
     return ufs[this.config.uf.toUpperCase()] || '53';
   }
 
-  /**
-   * Consulta o Status de Serviço na SEFAZ para verificar disponibilidade.
-   */
-  public async consultarStatus(): Promise<any> {
-    const codigoUf = this.getCodigoUF();
+  public async consultarStatus(): Promise<RetornoSefaz> {
+    const url = this.getUrl('status');
     const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
-    const url = this.getStatusServicoUrl();
-
+    
     const xmlBody = `<?xml version="1.0" encoding="UTF-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4">
       <consStatServ versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">
         <tpAmb>${tpAmb}</tpAmb>
-        <cUF>${codigoUf}</cUF>
+        <cUF>${this.getCodigoUF()}</cUF>
         <xServ>STATUS</xServ>
       </consStatServ>
     </nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
-    const agent = this.config.certificado.getHttpsAgent();
+    return this.enviarSoap(url, xmlBody);
+  }
 
+  /**
+   * Recebe os dados da NFe em formato JS/JSON, converte para XML, assina e envia.
+   */
+  public async emitir(dadosNFe: DadosNFe): Promise<RetornoSefaz> {
+    const idLote = Math.floor(Math.random() * 1000000).toString();
+
+    // 1. Gera o XML da nota a partir do objeto passado pelo usuário
+    const xmlNFeStr = create({ NFe: { '@xmlns': 'http://www.portalfiscal.inf.br/nfe', ...dadosNFe } }).end({ prettyPrint: false });
+
+    // 2. Assina o XML
+    console.log('Assinando o XML...');
+    const xmlAssinado = this.assinador.assinarXmlNFe(xmlCruFormatado(xmlNFeStr));
+
+    // 3. Monta o Lote (SOAP)
+    // A SEFAZ rejeita espaços em branco, quebras de linha ou comentários dentro da tag enviNFe (Erro 588)
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"><enviNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><idLote>${idLote}</idLote><indSinc>1</indSinc>${xmlAssinado.replace('<?xml version="1.0"?>', '').trim()}</enviNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+    // 4. Envia
+    console.log('Enviando para a SEFAZ...');
+    return this.enviarSoap(this.getUrl('autorizacao'), xmlBody);
+  }
+
+  private async enviarSoap(url: string, xmlBody: string) {
+    const agent = this.config.certificado.getHttpsAgent();
     try {
       const response = await axios.post(url, xmlBody, {
         httpsAgent: agent,
-        headers: {
-          'Content-Type': 'application/soap+xml; charset=utf-8',
-        },
+        headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
       });
-
-      return {
-        sucesso: true,
-        xml: response.data
-      };
+      return { sucesso: true, xml: response.data };
     } catch (error: any) {
       if (error.response) {
-         throw new Error(`Erro na SEFAZ: ${error.response.status} - ${error.response.data}`);
+         throw new Error(`Erro na SEFAZ: HTTP ${error.response.status} - ${error.response.data}`);
       }
       throw error;
     }
   }
+}
+
+function xmlCruFormatado(xml: string) {
+    // Evita declarações duplicadas do xmlbuilder2 se houver
+    return xml.replace('<?xml version="1.0"?>', '').trim();
 }
