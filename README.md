@@ -75,6 +75,13 @@ testarSefaz();
 
 Este projeto está no início (Fase 1: Comunicação Base). As próximas etapas envolvem a construção dos Builders de XML e a Assinatura Digital (XMLDSig). Toda contribuição da comunidade Node.js brasileira é bem-vinda!
 
+## 👨‍💻 Autor
+
+Criado e idealizado por **Rafael Conrado**.
+Se você curtiu o projeto, me dê um "Alô" nas redes:
+* [GitHub - @rafconrado](https://github.com/rafconrado)
+* [LinkedIn](https://www.linkedin.com/in/rafconrado/)
+
 ## 📝 Licença
 
 MIT License

@@ -6,9 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["nfe", "sefaz", "xml", "xmldsig", "soap", "nota-fiscal"],
+  "author": "Rafael Conrado",
+  "license": "MIT",
   "dependencies": {
     "@xmldom/xmldom": "^0.9.12",
     "axios": "^1.20.0",
