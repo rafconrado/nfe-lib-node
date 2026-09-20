@@ -1,0 +1,17 @@
+node_modules/
+dist/
+
+# O MAIS IMPORTANTE: NUNCA commitar certificados ou chaves!
+*.pfx
+*.p12
+*.cer
+*.key
+*.pem
+
+# Env vars
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
