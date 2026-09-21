@@ -80,7 +80,7 @@ Este projeto está no início (Fase 1: Comunicação Base). As próximas etapas 
 Criado e idealizado por **Rafael Conrado**.
 Se você curtiu o projeto, me dê um "Alô" nas redes:
 * [GitHub - @rafconrado](https://github.com/rafconrado)
-* [LinkedIn](https://www.linkedin.com/in/rafconrado/)
+* [LinkedIn](https://www.linkedin.com/in/rafconradoo/)
 
 ## 📝 Licença
 
