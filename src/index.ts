@@ -1,3 +1,4 @@
-export { NFe, ConfiguracaoNFe, AmbienteSefaz } from './NFe';
+export { NFe } from './NFe';
+export type { ConfiguracaoNFe, AmbienteSefaz } from './NFe';
 export { Certificado } from './Certificado';
-export { DadosNFe, RetornoSefaz } from './types';
+export type { DadosNFe, RetornoSefaz } from './types';

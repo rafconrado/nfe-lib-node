@@ -154,7 +154,12 @@ async function rodarEmissao() {
     const resposta = await nfe.emitir(dadosNota);
     
     console.log('\n✅ Resposta da SEFAZ:');
-    console.log(resposta.xml);
+    console.log(`Status: ${resposta.status} - ${resposta.motivo}`);
+    if (!resposta.sucesso) {
+      console.log('Nota não autorizada.');
+    } else {
+      console.log('Sucesso! (Veja o console para o XML ou salve em um banco de dados)');
+    }
 
   } catch (error: any) {
     console.error('\n❌ Erro:');

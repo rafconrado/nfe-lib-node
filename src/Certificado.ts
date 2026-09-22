@@ -2,9 +2,9 @@ import https from 'https';
 
 export class Certificado {
   public pfxBuffer: Buffer;
-  public password?: string;
+  public password?: string | undefined;
 
-  constructor(pfxBuffer: Buffer, password?: string) {
+  constructor(pfxBuffer: Buffer, password?: string | undefined) {
     this.pfxBuffer = pfxBuffer;
     this.password = password;
   }

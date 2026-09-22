@@ -6,7 +6,7 @@ export class Assinador {
   private privateKeyPem: string;
   private publicCertPem: string;
 
-  constructor(pfxBuffer: Buffer, password?: string) {
+  constructor(pfxBuffer: Buffer, password?: string | undefined) {
     const { privateKey, certificate } = this.extractPemFromPfx(pfxBuffer, password);
     this.privateKeyPem = privateKey;
     this.publicCertPem = certificate;
@@ -15,21 +15,23 @@ export class Assinador {
   /**
    * Extrai a chave privada e o certificado público do PFX
    */
-  private extractPemFromPfx(pfxBuffer: Buffer, password?: string) {
+  private extractPemFromPfx(pfxBuffer: Buffer, password?: string | undefined) {
     const p12Asn1 = forge.asn1.fromDer(pfxBuffer.toString('binary'));
     const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password || '');
 
     let privateKeyPem = '';
     let certPem = '';
 
-    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-    const cert = certBags[forge.pki.oids.certBag]?.[0]?.cert;
+    const certBagOid = forge.pki.oids.certBag as string;
+    const certBags = p12.getBags({ bagType: certBagOid });
+    const cert = certBags[certBagOid]?.[0]?.cert;
     if (cert) {
       certPem = forge.pki.certificateToPem(cert);
     }
 
-    const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-    const key = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0]?.key;
+    const keyBagOid = forge.pki.oids.pkcs8ShroudedKeyBag as string;
+    const keyBags = p12.getBags({ bagType: keyBagOid });
+    const key = keyBags[keyBagOid]?.[0]?.key;
     if (key) {
       privateKeyPem = forge.pki.privateKeyToPem(key);
     }

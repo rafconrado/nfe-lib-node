@@ -3,6 +3,7 @@ import { Certificado } from './Certificado';
 import { Assinador } from './Assinador';
 import { create } from 'xmlbuilder2';
 import { DadosNFe, RetornoSefaz } from './types';
+import { DOMParser } from '@xmldom/xmldom';
 
 export type AmbienteSefaz = 'producao' | 'homologacao';
 
@@ -83,14 +84,34 @@ export class NFe {
     return this.enviarSoap(this.getUrl('autorizacao'), xmlBody);
   }
 
-  private async enviarSoap(url: string, xmlBody: string) {
+  private async enviarSoap(url: string, xmlBody: string): Promise<RetornoSefaz> {
     const agent = this.config.certificado.getHttpsAgent();
     try {
       const response = await axios.post(url, xmlBody, {
         httpsAgent: agent,
         headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
       });
-      return { sucesso: true, xml: response.data };
+      
+      const xmlStr = response.data;
+      const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
+      
+      // Tenta pegar o cStat do protocolo primeiro (resultado da nota individual)
+      let cStatNode = doc.getElementsByTagName('infProt')[0]?.getElementsByTagName('cStat')[0];
+      let xMotivoNode = doc.getElementsByTagName('infProt')[0]?.getElementsByTagName('xMotivo')[0];
+      
+      // Se não tiver protocolo, pega o cStat geral do lote ou do status de serviço
+      if (!cStatNode) {
+        cStatNode = doc.getElementsByTagName('cStat')[0];
+        xMotivoNode = doc.getElementsByTagName('xMotivo')[0];
+      }
+
+      const status = cStatNode && cStatNode.textContent ? parseInt(cStatNode.textContent, 10) : 0;
+      const motivo = xMotivoNode && xMotivoNode.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
+      
+      // 100 = Autorizado, 104 = Lote Processado, 107 = Serviço em Operação
+      const sucesso = status === 100 || status === 104 || status === 107;
+
+      return { sucesso, status, motivo, xml: xmlStr };
     } catch (error: any) {
       if (error.response) {
          throw new Error(`Erro na SEFAZ: HTTP ${error.response.status} - ${error.response.data}`);

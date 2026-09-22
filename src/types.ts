@@ -69,5 +69,7 @@ export interface DadosNFe {
 
 export interface RetornoSefaz {
   sucesso: boolean;
+  status: number;
+  motivo: string;
   xml: string;
 }
