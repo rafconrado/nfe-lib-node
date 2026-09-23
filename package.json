@@ -1,13 +1,27 @@
 {
   "name": "nfe-lib-node",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Biblioteca Node.js para emissão, assinatura e comunicação com webservices de NF-e (SEFAZ)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["nfe", "sefaz", "xml", "xmldsig", "soap", "nota-fiscal"],
+  "keywords": [
+    "nfe",
+    "sefaz",
+    "xml",
+    "xmldsig",
+    "soap",
+    "nota-fiscal"
+  ],
   "author": "Rafael Conrado",
   "license": "MIT",
   "dependencies": {
