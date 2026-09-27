@@ -7,11 +7,11 @@ async function rodarEmissao() {
 
   try {
     const pfxPath = path.resolve(__dirname, '../certificado.pfx');
-    
+
     // ATENÇÃO: Substitua 'SUA_SENHA' pela senha real do certificado!
     const certificado = new Certificado(
       fs.readFileSync(pfxPath),
-      'SUA_SENHA' 
+      'SUA_SENHA'
     );
 
     const nfe = new NFe({
@@ -24,7 +24,7 @@ async function rodarEmissao() {
     // DADOS DA NOTA FISCAL
     // =========================================================================
     const chaveAcesso = '53260999999999999999550010000000011000000011';
-    
+
     const dadosNota: DadosNFe = {
       infNFe: {
         '@Id': `NFe${chaveAcesso}`,
@@ -84,13 +84,13 @@ async function rodarEmissao() {
           },
           indIEDest: '9' // 9=Não Contribuinte
         },
-        det: {
-          '@nItem': '1',
+        det: [{
+          '@nItem': 1,
           prod: {
             cProd: '001',
             cEAN: 'SEM GTIN',
             xProd: 'Produto de Teste NFe',
-            NCM: '94039000', 
+            NCM: '94039000',
             CFOP: '5102',
             uCom: 'UN',
             qCom: '1.0000',
@@ -127,32 +127,33 @@ async function rodarEmissao() {
               }
             }
           }
-        },
+        }],
         total: {
           ICMSTot: {
-            vBC: '0.00', vICMS: '0.00', vICMSDeson: '0.00', vFCP: '0.00', 
-            vBCST: '0.00', vST: '0.00', vFCPST: '0.00', vFCPSTRet: '0.00', 
-            vProd: '0.01', vFrete: '0.00', vSeg: '0.00', vDesc: '0.00', 
-            vII: '0.00', vIPI: '0.00', vIPIDevol: '0.00', vPIS: '0.00', 
+            vBC: '0.00', vICMS: '0.00', vICMSDeson: '0.00', vFCP: '0.00',
+            vBCST: '0.00', vST: '0.00', vFCPST: '0.00', vFCPSTRet: '0.00',
+            vProd: '0.01', vFrete: '0.00', vSeg: '0.00', vDesc: '0.00',
+            vII: '0.00', vIPI: '0.00', vIPIDevol: '0.00', vPIS: '0.00',
             vCOFINS: '0.00', vOutro: '0.00', vNF: '0.01', vTotTrib: '0.00'
           }
         },
         transp: {
-          modFrete: '9' // 9=Sem Frete
+          modFrete: 9 // 9=Sem Frete
         },
         pag: {
-          detPag: {
-            indPag: '0', // 0=Pagamento à Vista
-            tPag: '01', // 01=Dinheiro
-            vPag: '0.01'
-          }
+          detPag: [
+            {
+              indPag: '0', // 0=Pagamento à vista
+              tPag: '01', // 01=Dinheiro
+              vPag: '0.01'
+            }]
         }
       }
     };
 
     console.log('Enviando NFe...');
     const resposta = await nfe.emitir(dadosNota);
-    
+
     console.log('\n✅ Resposta da SEFAZ:');
     console.log(`Status: ${resposta.status} - ${resposta.motivo}`);
     if (!resposta.sucesso) {
