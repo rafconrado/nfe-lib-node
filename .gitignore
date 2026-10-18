@@ -11,7 +11,8 @@ dist/
 # Env vars
 .env
 
-# Logs
+# Logs e XMLs gerados localmente
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+notas-emitidas/

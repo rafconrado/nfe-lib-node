@@ -1,4 +1,4 @@
-import { NFe, Certificado } from '../src';
+import { NFe, Certificado } from '../dist/index.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -7,7 +7,7 @@ async function rodarExemplo() {
 
   try {
     // 1. Caminho do certificado
-    const pfxPath = path.resolve(__dirname, '../certificado.pfx');
+    const pfxPath = path.resolve(process.cwd(), 'certificado.pfx');
     if (!fs.existsSync(pfxPath)) {
       console.error('ERRO: Arquivo certificado.pfx não encontrado na raiz do projeto!');
       return;
@@ -17,7 +17,7 @@ async function rodarExemplo() {
     // ATENÇÃO: Substitua 'SUA_SENHA' pela senha real do certificado!
     const certificado = new Certificado(
       fs.readFileSync(pfxPath),
-      'SUA_SENHA' 
+      'SUA_SENHA'
     );
 
     // 3. Configurando a NFe para o DF em Homologação
@@ -30,7 +30,7 @@ async function rodarExemplo() {
     // 4. Testando a comunicação (Status do Serviço)
     console.log('Consultando status da SEFAZ...');
     const status = await nfe.consultarStatus();
-    
+
     console.log('\n✅ Sucesso! Resposta da SEFAZ:');
     console.log(status.xml);
 

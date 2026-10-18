@@ -1,4 +1,5 @@
-import { NFe, Certificado, DadosNFe } from '../src';
+import { NFe, Certificado, Danfe } from '../dist/index.js';
+import type { DadosNFe } from '../dist/index.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -6,7 +7,7 @@ async function rodarEmissao() {
   console.log('Iniciando emissão de NF-e...');
 
   try {
-    const pfxPath = path.resolve(__dirname, '../certificado.pfx');
+    const pfxPath = path.resolve(process.cwd(), 'certificado.pfx');
 
     // ATENÇÃO: Substitua 'SUA_SENHA' pela senha real do certificado!
     const certificado = new Certificado(
@@ -23,7 +24,7 @@ async function rodarEmissao() {
     // =========================================================================
     // DADOS DA NOTA FISCAL
     // =========================================================================
-    const chaveAcesso = '53260999999999999999550010000000011000000011';
+    const chaveAcesso = '53260999999999999999550010000000011847291638';
 
     const dadosNota: DadosNFe = {
       infNFe: {
@@ -31,7 +32,7 @@ async function rodarEmissao() {
         '@versao': '4.00',
         ide: {
           cUF: '53',
-          cNF: '00000001',
+          cNF: '84729163',
           natOp: 'VENDA DE MERCADORIA',
           mod: '55',
           serie: '1',
@@ -42,7 +43,7 @@ async function rodarEmissao() {
           cMunFG: '5300108', // Brasília
           tpImp: '1', // 1=Retrato
           tpEmis: '1', // 1=Normal
-          cDV: '1',
+          cDV: '8',
           tpAmb: '2', // 2=Homologação
           finNFe: '1', // 1=Normal
           indFinal: '1', // 1=Consumidor Final
@@ -138,7 +139,7 @@ async function rodarEmissao() {
           }
         },
         transp: {
-          modFrete: 9 // 9=Sem Frete
+          modFrete: '9' // 9=Sem Frete
         },
         pag: {
           detPag: [
@@ -160,6 +161,20 @@ async function rodarEmissao() {
       console.log('Nota não autorizada.');
     } else {
       console.log('Sucesso! (Veja o console para o XML ou salve em um banco de dados)');
+    }
+
+    const outputDir = path.resolve(process.cwd(), 'notas-emitidas');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    if (resposta.xmlAssinado) {
+      fs.writeFileSync(path.join(outputDir, `NFe${chaveAcesso}-assinada.xml`), resposta.xmlAssinado, 'utf8');
+      fs.writeFileSync(path.join(outputDir, `NFe${chaveAcesso}-danfe.pdf`), Danfe.fromXml(resposta.xmlAssinado, resposta.xml));
+    }
+    fs.writeFileSync(path.join(outputDir, `NFe${chaveAcesso}-retorno-sefaz.xml`), resposta.xml, 'utf8');
+    if (resposta.xmlNfeProc) {
+      fs.writeFileSync(path.join(outputDir, `NFe${chaveAcesso}-nfeProc.xml`), resposta.xmlNfeProc, 'utf8');
     }
 
   } catch (error: any) {

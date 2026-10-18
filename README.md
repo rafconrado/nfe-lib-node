@@ -6,10 +6,16 @@ Pague apenas os seus impostos, não pela emissão! 😉
 
 ## 📦 Instalação
 
-Como o projeto está no início, faça o clone e instale as dependências localmente:
+Para instalar como biblioteca em outro projeto Node.js/TypeScript direto pelo GitHub:
 
 ```bash
-git clone https://github.com/SEU_USUARIO/nfe-lib-node.git
+npm install github:rafconrado/nfe-lib-node
+```
+
+Ou, para clonar e rodar localmente:
+
+```bash
+git clone https://github.com/rafconrado/nfe-lib-node.git
 cd nfe-lib-node
 npm install
 ```

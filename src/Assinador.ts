@@ -23,8 +23,8 @@ export class Assinador {
     let certPem = '';
 
     const certBagOid = forge.pki.oids.certBag as string;
-    const certBags = p12.getBags({ bagType: certBagOid });
-    const cert = certBags[certBagOid]?.[0]?.cert;
+    const certBags = p12.getBags({ bagType: certBagOid })[certBagOid] ?? [];
+    const cert = this.getLeafCert(certBags);
     if (cert) {
       certPem = forge.pki.certificateToPem(cert);
     }
@@ -43,13 +43,25 @@ export class Assinador {
     return { privateKey: privateKeyPem, certificate: certPem };
   }
 
+  private getLeafCert(certBags: forge.pkcs12.Bag[]): forge.pki.Certificate | undefined {
+    for (const bag of certBags) {
+      if (!bag.cert) continue;
+      const isCa = bag.cert.extensions?.some(
+        (ext: { name?: string; cA?: boolean }) => ext.name === 'basicConstraints' && ext.cA === true
+      );
+      if (!isCa) {
+        return bag.cert;
+      }
+    }
+    return certBags[0]?.cert;
+  }
+
   /**
    * Assina o XML da Nota Fiscal Eletrônica no padrão SEFAZ (XMLDSig)
    */
   public assinarXmlNFe(xmlCru: string): string {
     const doc = new DOMParser().parseFromString(xmlCru, 'text/xml');
     const infNFe = doc.getElementsByTagName('infNFe')[0];
-    
     if (!infNFe) {
       throw new Error('Tag <infNFe> não encontrada no XML. O XML fornecido não é uma NF-e válida.');
     }
@@ -64,11 +76,11 @@ export class Assinador {
     sig.addReference({
       xpath: `//*[@Id='${id}']`,
       transforms: [
-        'http://www.w3.org/2000/09/xmldsig#enveloped-signature', 
-        'http://www.w3.org/TR/2001/REC-xml-c14n-20010315'
+        'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+        'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
       ],
       digestAlgorithm: 'http://www.w3.org/2000/09/xmldsig#sha1',
-      uri: `#${id}`
+      uri: `#${id}`,
     });
 
     sig.privateKey = this.privateKeyPem;
@@ -80,7 +92,7 @@ export class Assinador {
 
     sig.computeSignature(xmlCru, {
       prefix: '',
-      location: { reference: `//*[local-name(.)='NFe']`, action: 'append' }
+      location: { reference: `//*[local-name(.)='NFe']`, action: 'append' },
     });
 
     return sig.getSignedXml();

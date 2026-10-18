@@ -2618,4 +2618,9 @@ export interface RetornoSefaz {
   motivo: string;
   /** XML completo do retorno. */
   xml: string;
+  /** XML da NF-e assinado enviado para a SEFAZ. */
+  xmlAssinado?: string | undefined;
+  /** XML completo distribuível (nfeProc = NFe assinada + protNFe da SEFAZ). */
+  xmlNfeProc?: string | undefined;
 }
+
