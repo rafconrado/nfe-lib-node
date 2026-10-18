@@ -6,10 +6,10 @@ Pague apenas os seus impostos, não pela emissão! 😉
 
 ## 📦 Instalação
 
-Para instalar como biblioteca em outro projeto Node.js/TypeScript direto pelo GitHub:
+Instale diretamente via NPM:
 
 ```bash
-npm install github:rafconrado/nfe-lib-node
+npm install nfe-lib-node
 ```
 
 Ou, para clonar e rodar localmente:
