@@ -19,7 +19,7 @@ export class NFe {
 
   constructor(config: ConfiguracaoNFe) {
     this.config = config;
-    this.assinador = new Assinador(config.certificado.pfxBuffer, config.certificado.password);
+    this.assinador = new Assinador(config.certificado);
   }
 
   private getUrl(servico: 'status' | 'autorizacao'): string {

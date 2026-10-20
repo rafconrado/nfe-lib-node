@@ -1,59 +1,19 @@
 import { SignedXml } from 'xml-crypto';
-import forge from 'node-forge';
 import { DOMParser } from '@xmldom/xmldom';
+import { Certificado } from './Certificado.js';
 
 export class Assinador {
   private privateKeyPem: string;
   private publicCertPem: string;
 
-  constructor(pfxBuffer: Buffer, password?: string | undefined) {
-    const { privateKey, certificate } = this.extractPemFromPfx(pfxBuffer, password);
+  constructor(certificadoOuPfx: Certificado | Buffer, password?: string | undefined) {
+    const cert =
+      certificadoOuPfx instanceof Certificado
+        ? certificadoOuPfx
+        : new Certificado(certificadoOuPfx, password);
+    const { privateKey, certificate } = cert.getPem();
     this.privateKeyPem = privateKey;
     this.publicCertPem = certificate;
-  }
-
-  /**
-   * Extrai a chave privada e o certificado público do PFX
-   */
-  private extractPemFromPfx(pfxBuffer: Buffer, password?: string | undefined) {
-    const p12Asn1 = forge.asn1.fromDer(pfxBuffer.toString('binary'));
-    const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password || '');
-
-    let privateKeyPem = '';
-    let certPem = '';
-
-    const certBagOid = forge.pki.oids.certBag as string;
-    const certBags = p12.getBags({ bagType: certBagOid })[certBagOid] ?? [];
-    const cert = this.getLeafCert(certBags);
-    if (cert) {
-      certPem = forge.pki.certificateToPem(cert);
-    }
-
-    const keyBagOid = forge.pki.oids.pkcs8ShroudedKeyBag as string;
-    const keyBags = p12.getBags({ bagType: keyBagOid });
-    const key = keyBags[keyBagOid]?.[0]?.key;
-    if (key) {
-      privateKeyPem = forge.pki.privateKeyToPem(key);
-    }
-
-    if (!privateKeyPem || !certPem) {
-      throw new Error('Não foi possível extrair a chave privada ou o certificado do PFX.');
-    }
-
-    return { privateKey: privateKeyPem, certificate: certPem };
-  }
-
-  private getLeafCert(certBags: forge.pkcs12.Bag[]): forge.pki.Certificate | undefined {
-    for (const bag of certBags) {
-      if (!bag.cert) continue;
-      const isCa = bag.cert.extensions?.some(
-        (ext: { name?: string; cA?: boolean }) => ext.name === 'basicConstraints' && ext.cA === true
-      );
-      if (!isCa) {
-        return bag.cert;
-      }
-    }
-    return certBags[0]?.cert;
   }
 
   /**
