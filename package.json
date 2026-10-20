@@ -1,6 +1,6 @@
 {
   "name": "nfe-lib-node",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Biblioteca Node.js para emissão, assinatura e comunicação com webservices de NF-e (SEFAZ)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
