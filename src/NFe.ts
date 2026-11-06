@@ -4,13 +4,23 @@ import { Assinador } from './Assinador.js';
 import { create } from 'xmlbuilder2';
 import type { DadosNFe, RetornoSefaz } from './types.js';
 import { DOMParser } from '@xmldom/xmldom';
+import {
+  obterAutorizadorPorUF,
+  obterCodigoUF,
+  obterUrlSefaz,
+  type AmbienteSefaz,
+  type AutorizadorSefaz,
+  type ServicoSefaz,
+  type SiglaUF,
+} from './webservices.js';
 
-export type AmbienteSefaz = 'producao' | 'homologacao';
+export type { AmbienteSefaz } from './webservices.js';
 
 export interface ConfiguracaoNFe {
-  uf: string;
+  uf: SiglaUF | (string & {});
   ambiente: AmbienteSefaz;
   certificado: Certificado;
+  contingencia?: boolean | undefined;
 }
 
 export class NFe {
@@ -22,29 +32,21 @@ export class NFe {
     this.assinador = new Assinador(config.certificado);
   }
 
-  private getUrl(servico: 'status' | 'autorizacao'): string {
-    // SVRS (Atende DF, RS, etc)
-    const baseUrl = this.config.ambiente === 'homologacao'
-      ? 'https://nfe-homologacao.svrs.rs.gov.br/ws'
-      : 'https://nfe.svrs.rs.gov.br/ws';
-
-    if (servico === 'status') {
-      return `${baseUrl}/NfeStatusServico/NfeStatusServico4.asmx`;
-    }
-    if (servico === 'autorizacao') {
-      return `${baseUrl}/NfeAutorizacao/NFeAutorizacao4.asmx`;
-    }
-    throw new Error('Serviço desconhecido');
+  public getAutorizador(): AutorizadorSefaz {
+    return obterAutorizadorPorUF(this.config.uf, this.config.contingencia ?? false);
   }
 
-  private getCodigoUF(): string {
-    const ufs: Record<string, string> = {
-      AC: '12', AL: '27', AM: '13', AP: '16', BA: '29', CE: '23', DF: '53', ES: '32',
-      GO: '52', MA: '21', MG: '31', MS: '50', MT: '51', PA: '15', PB: '25', PE: '26',
-      PI: '22', PR: '41', RJ: '33', RN: '24', RO: '11', RR: '14', RS: '43', SC: '42',
-      SE: '28', SP: '35', TO: '17',
-    };
-    return ufs[this.config.uf.toUpperCase()] || '53';
+  public getUrl(servico: ServicoSefaz): string {
+    return obterUrlSefaz(
+      this.config.uf,
+      this.config.ambiente,
+      servico,
+      this.config.contingencia ?? false
+    );
+  }
+
+  public getCodigoUF(): string {
+    return obterCodigoUF(this.config.uf);
   }
 
   public async consultarStatus(): Promise<RetornoSefaz> {

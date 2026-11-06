@@ -86,6 +86,7 @@ async function emitirNota() {
 
 * 🔐 **Certificado Digital A1 (`.pfx`)**: Extração com cache em memória, inspeção de validade/titular (`getDados()`, `estaValido()`) e configuração de mTLS.
 * ✍️ **Assinatura Digital XMLDSig**: Assinatura no padrão exigido pela SEFAZ (`rsa-sha1` / `enveloped-signature` / `c14n`).
+* 🗺️ **Mapeamento Completo de WebServices por UF**: Resolução automática das URLs oficiais da NF-e 4.00 para todas as 27 UFs (Autorizadores próprios: AM, BA, GO, MG, MS, MT, PE, PR, RS, SP + SVAN, SVRS e contingência SVC-AN / SVC-RS).
 * 📡 **Comunicação SEFAZ (SOAP 1.2)**: Consulta de status do serviço (`consultarStatus`) e autorização síncrona de NF-e (`emitir`) com geração automática do `<nfeProc>`.
 * 📄 **Gerador de DANFE em PDF**: Geração nativa de PDF com código de barras `Code128C` via `Danfe.fromXml()`.
 * 📘 **Tipagem TypeScript Completa**: Interfaces completas da NF-e / NFC-e 4.00 (incluindo os novos grupos de IBS/CBS da Reforma Tributária).
@@ -97,7 +98,7 @@ async function emitirNota() {
 
 ## 🤝 Contribuições
 
-As próximas etapas envolvem suporte a eventos (Cancelamento, Carta de Correção), Consulta de Protocolo por chave, Inutilização e mapeamento completo de WebServices de todas as UFs. Toda contribuição da comunidade Node.js brasileira é bem-vinda!
+As próximas etapas envolvem suporte a eventos (Cancelamento, Carta de Correção), Consulta de Protocolo por chave e Inutilização. Toda contribuição da comunidade Node.js brasileira é bem-vinda!
 
 ## 👨‍💻 Autor
 
