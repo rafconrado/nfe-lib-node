@@ -20,4 +20,13 @@ export type {
   ServicoSefaz,
   SiglaUF,
 } from './webservices.js';
+export {
+  calcularDigitoVerificador,
+  gerarChaveAcesso,
+  validarChaveAcesso,
+} from './chaveAcesso.js';
+export type {
+  ParametrosChaveAcesso,
+  ResultadoChaveAcesso,
+} from './chaveAcesso.js';
 export type * from './types.js';
