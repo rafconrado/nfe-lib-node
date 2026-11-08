@@ -14,6 +14,9 @@ export {
   AUTORIZADOR_POR_UF,
   CODIGOS_UF,
   URLS_SEFAZ,
+  getAutorizadorPorUF,
+  getCodigoUF,
+  getUrlSefaz,
   normalizarUF,
   obterAutorizadorPorUF,
   obterCodigoUF,
@@ -29,6 +32,8 @@ export {
   calcularDigitoVerificador,
   extrairDadosChaveAcesso,
   gerarChaveAcesso,
+  getDadosChaveAcesso,
+  getDigitoVerificador,
   validarChaveAcesso,
 } from './chaveAcesso.js';
 export type {

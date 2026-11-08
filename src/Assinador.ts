@@ -58,6 +58,9 @@ export class Assinador {
     return sig.getSignedXml();
   }
 
+  /**
+   * Assina o XML de um Evento da NF-e (ex: Cancelamento ou Carta de Correção) no padrão SEFAZ (XMLDSig).
+   */
   public assinarXmlEvento(xmlCru: string): string {
     const doc = new DOMParser().parseFromString(xmlCru, 'text/xml');
     const infEvento = doc.getElementsByTagName('infEvento')[0];

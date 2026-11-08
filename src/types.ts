@@ -2622,6 +2622,7 @@ export interface RetornoSefaz {
   xmlAssinado?: string | undefined;
   /** XML completo distribuível (nfeProc = NFe assinada + protNFe da SEFAZ). */
   xmlNfeProc?: string | undefined;
+  /** XML completo distribuível do evento (procEventoNFe = evento assinado + retEvento da SEFAZ). */
   xmlProcEvento?: string | undefined;
 }
 

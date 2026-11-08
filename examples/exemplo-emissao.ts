@@ -177,9 +177,9 @@ async function rodarEmissao() {
       fs.writeFileSync(path.join(outputDir, `NFe${chaveAcesso}-nfeProc.xml`), resposta.xmlNfeProc, 'utf8');
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('\n❌ Erro:');
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
   }
 }
 

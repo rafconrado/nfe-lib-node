@@ -34,9 +34,9 @@ async function rodarExemplo() {
     console.log('\n✅ Sucesso! Resposta da SEFAZ:');
     console.log(status.xml);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('\n❌ Erro ao comunicar com a SEFAZ:');
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
   }
 }
 

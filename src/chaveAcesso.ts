@@ -1,4 +1,4 @@
-import { obterCodigoUF, type SiglaUF } from './webservices.js';
+import { getCodigoUF, type SiglaUF } from './webservices.js';
 
 export interface ParametrosChaveAcesso {
   /** Sigla da UF (ex: 'SP', 'DF') ou código IBGE de 2 dígitos (ex: '35', '53') */
@@ -60,7 +60,7 @@ export interface DadosChaveAcesso {
 /**
  * Calcula o dígito verificador (cDV) em Módulo 11 a partir dos 43 primeiros dígitos da chave.
  */
-export function calcularDigitoVerificador(chave43: string): string {
+export function getDigitoVerificador(chave43: string): string {
   const limpa = chave43.replace(/\D/g, '');
   if (limpa.length !== 43) {
     throw new Error(`A base da chave de acesso deve conter exatamente 43 dígitos (recebido: ${limpa.length}).`);
@@ -85,7 +85,7 @@ export function calcularDigitoVerificador(chave43: string): string {
  */
 export function gerarChaveAcesso(params: ParametrosChaveAcesso): ResultadoChaveAcesso {
   const ufTrim = params.uf.trim();
-  const cUF = /^\d{2}$/.test(ufTrim) ? ufTrim : obterCodigoUF(ufTrim);
+  const cUF = /^\d{2}$/.test(ufTrim) ? ufTrim : getCodigoUF(ufTrim);
   const aamm = extrairAnoMes(params.dataEmissao);
 
   const docLimpo = params.cnpjOuCpf.replace(/\D/g, '');
@@ -105,7 +105,7 @@ export function gerarChaveAcesso(params: ParametrosChaveAcesso): ResultadoChaveA
   }
 
   const base43 = `${cUF}${aamm}${cnpj}${mod}${serie}${nNF}${tpEmis}${cNF}`;
-  const cDV = calcularDigitoVerificador(base43);
+  const cDV = getDigitoVerificador(base43);
   const chave = `${base43}${cDV}`;
 
   return {
@@ -123,14 +123,14 @@ export function validarChaveAcesso(chaveOuId: string): boolean {
   if (!/^\d{44}$/.test(limpa)) {
     return false;
   }
-  const dvEsperado = calcularDigitoVerificador(limpa.slice(0, 43));
+  const dvEsperado = getDigitoVerificador(limpa.slice(0, 43));
   return limpa[43] === dvEsperado;
 }
 
 /**
  * Extrai e decompõe os campos que formam uma chave de acesso de 44 dígitos da NF-e/NFC-e.
  */
-export function extrairDadosChaveAcesso(chaveOuId: string): DadosChaveAcesso {
+export function getDadosChaveAcesso(chaveOuId: string): DadosChaveAcesso {
   const limpa = chaveOuId.trim().replace(/^NFe/i, '').replace(/\D/g, '');
   if (limpa.length !== 44) {
     throw new Error(`A chave de acesso deve conter 44 dígitos (recebido: ${limpa.length}).`);
@@ -147,7 +147,7 @@ export function extrairDadosChaveAcesso(chaveOuId: string): DadosChaveAcesso {
   const tpEmis = limpa.slice(34, 35);
   const cNF = limpa.slice(35, 43);
   const cDV = limpa.slice(43, 44);
-  const valida = calcularDigitoVerificador(limpa.slice(0, 43)) === cDV;
+  const valida = getDigitoVerificador(limpa.slice(0, 43)) === cDV;
 
   return {
     chave: limpa,
@@ -165,6 +165,9 @@ export function extrairDadosChaveAcesso(chaveOuId: string): DadosChaveAcesso {
     valida,
   };
 }
+
+export const calcularDigitoVerificador = getDigitoVerificador;
+export const extrairDadosChaveAcesso = getDadosChaveAcesso;
 
 function extrairAnoMes(data: Date | string): string {
   if (data instanceof Date) {

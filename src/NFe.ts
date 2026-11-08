@@ -5,15 +5,15 @@ import { create } from 'xmlbuilder2';
 import type { DadosNFe, RetornoSefaz } from './types.js';
 import { DOMParser } from '@xmldom/xmldom';
 import {
-  obterAutorizadorPorUF,
-  obterCodigoUF,
-  obterUrlSefaz,
+  getAutorizadorPorUF,
+  getCodigoUF,
+  getUrlSefaz,
   type AmbienteSefaz,
   type AutorizadorSefaz,
   type ServicoSefaz,
   type SiglaUF,
 } from './webservices.js';
-import { extrairDadosChaveAcesso, validarChaveAcesso } from './chaveAcesso.js';
+import { getDadosChaveAcesso, validarChaveAcesso } from './chaveAcesso.js';
 
 export type { AmbienteSefaz } from './webservices.js';
 
@@ -25,19 +25,30 @@ export interface ConfiguracaoNFe {
 }
 
 export interface ParametrosCancelamentoNFe {
+  /** Chave de acesso de 44 dígitos da NF-e (com ou sem o prefixo 'NFe') */
   chave: string;
+  /** Número do protocolo de autorização da NF-e (15 dígitos) */
   protocolo: string;
+  /** Justificativa do cancelamento (mínimo de 15 caracteres) */
   justificativa: string;
+  /** CNPJ ou CPF do autor do evento (opcional; padrão: CNPJ extraído da chave de acesso) */
   cnpjOuCpf?: string | undefined;
+  /** Data e hora do evento (opcional; padrão: data/hora atual no formato ISO com timezone) */
   dhEvento?: string | Date | undefined;
+  /** Número sequencial do evento (opcional; padrão: 1) */
   nSeqEvento?: number | string | undefined;
 }
 
 export interface ParametrosCartaCorrecaoNFe {
+  /** Chave de acesso de 44 dígitos da NF-e (com ou sem o prefixo 'NFe') */
   chave: string;
+  /** Texto da correção a ser registrada (mínimo de 15 caracteres) */
   correcao: string;
+  /** Número sequencial do evento de Carta de Correção (1 a 20; padrão: 1) */
   nSeqEvento?: number | string | undefined;
+  /** CNPJ ou CPF do autor do evento (opcional; padrão: CNPJ extraído da chave de acesso) */
   cnpjOuCpf?: string | undefined;
+  /** Data e hora do evento (opcional; padrão: data/hora atual no formato ISO com timezone) */
   dhEvento?: string | Date | undefined;
 }
 
@@ -51,11 +62,11 @@ export class NFe {
   }
 
   public getAutorizador(): AutorizadorSefaz {
-    return obterAutorizadorPorUF(this.config.uf, this.config.contingencia ?? false);
+    return getAutorizadorPorUF(this.config.uf, this.config.contingencia ?? false);
   }
 
   public getUrl(servico: ServicoSefaz): string {
-    return obterUrlSefaz(
+    return getUrlSefaz(
       this.config.uf,
       this.config.ambiente,
       servico,
@@ -64,9 +75,12 @@ export class NFe {
   }
 
   public getCodigoUF(): string {
-    return obterCodigoUF(this.config.uf);
+    return getCodigoUF(this.config.uf);
   }
 
+  /**
+   * Consulta o status de operação do serviço da SEFAZ para a UF configurada.
+   */
   public async consultarStatus(): Promise<RetornoSefaz> {
     const url = this.getUrl('status');
     const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
@@ -76,6 +90,9 @@ export class NFe {
     return this.enviarSoap(url, xmlBody);
   }
 
+  /**
+   * Consulta a situação atual e o protocolo de uma NF-e na SEFAZ pela chave de acesso de 44 dígitos.
+   */
   public async consultarProtocolo(chaveOuId: string): Promise<RetornoSefaz> {
     const chave = chaveOuId.trim().replace(/^NFe/i, '');
     if (!validarChaveAcesso(chave)) {
@@ -100,7 +117,6 @@ export class NFe {
     const xmlNFeStr = create({ NFe: { '@xmlns': 'http://www.portalfiscal.inf.br/nfe', ...dadosNFe } }).end({ prettyPrint: false });
 
     // 2. Assina o XML
-    console.log('Assinando o XML...');
     const xmlAssinado = xmlCruFormatado(
       this.assinador.assinarXmlNFe(xmlCruFormatado(xmlNFeStr))
     );
@@ -110,7 +126,6 @@ export class NFe {
     const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"><enviNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><idLote>${idLote}</idLote><indSinc>1</indSinc>${xmlAssinado}</enviNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 
     // 4. Envia
-    console.log('Enviando para a SEFAZ...');
     const retorno = await this.enviarSoap(this.getUrl('autorizacao'), xmlBody);
     const docRetorno = new DOMParser().parseFromString(retorno.xml, 'text/xml');
     const protNFeNode = docRetorno.getElementsByTagName('protNFe')[0];
@@ -125,6 +140,9 @@ export class NFe {
     };
   }
 
+  /**
+   * Envia o evento de Cancelamento (tpEvento 110111) de uma NF-e autorizada para a SEFAZ.
+   */
   public async cancelar(params: ParametrosCancelamentoNFe): Promise<RetornoSefaz> {
     const protocolo = params.protocolo.trim();
     if (!protocolo) {
@@ -150,6 +168,9 @@ export class NFe {
     });
   }
 
+  /**
+   * Envia o evento de Carta de Correção Eletrônica - CC-e (tpEvento 110110) para a SEFAZ.
+   */
   public async cartaCorrecao(params: ParametrosCartaCorrecaoNFe): Promise<RetornoSefaz> {
     const correcao = params.correcao.trim();
     if (correcao.length < 15) {
@@ -186,7 +207,7 @@ export class NFe {
       throw new Error(`Chave de acesso inválida: "${opcoes.chaveOuId}". Informe uma chave de 44 dígitos com dígito verificador válido.`);
     }
 
-    const dadosChave = extrairDadosChaveAcesso(chaveLimpa);
+    const dadosChave = getDadosChaveAcesso(chaveLimpa);
     const nSeq = Number(String(opcoes.nSeqEvento).trim());
     if (!Number.isInteger(nSeq) || nSeq < 1 || nSeq > 20) {
       throw new Error('O número sequencial do evento (nSeqEvento) deve ser um inteiro entre 1 e 20.');
@@ -257,9 +278,11 @@ export class NFe {
       const xmlStr = response.data;
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
 
+      // Tenta pegar o cStat do protocolo ou do evento primeiro (resultado individual)
       const infProt = doc.getElementsByTagName('infProt')[0];
       const infEventoRet = doc.getElementsByTagName('retEvento')[0]?.getElementsByTagName('infEvento')[0];
 
+      // Se não tiver protocolo nem evento, pega o cStat geral do lote ou do status de serviço
       const cStatNode =
         infProt?.getElementsByTagName('cStat')[0] ??
         infEventoRet?.getElementsByTagName('cStat')[0] ??
@@ -273,6 +296,7 @@ export class NFe {
       const status = cStatNode?.textContent ? parseInt(cStatNode.textContent, 10) : 0;
       const motivo = xMotivoNode?.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
 
+      // 100 = Autorizado, 101 = Cancelamento Homologado, 104 = Lote Processado, 107 = Serviço em Operação, 135/136 = Evento Registrado
       const sucesso =
         status === 100 ||
         status === 101 ||
@@ -292,6 +316,7 @@ export class NFe {
 }
 
 function xmlCruFormatado(xml: string) {
+  // Evita declarações duplicadas do xmlbuilder2 se houver
   return xml.replace(/^<\?xml[^?]*\?>\s*/i, '').trim();
 }
 

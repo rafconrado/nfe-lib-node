@@ -408,26 +408,30 @@ export function normalizarUF(uf: string): SiglaUF {
   return sigla;
 }
 
-export function obterCodigoUF(uf: string): string {
+export function getCodigoUF(uf: string): string {
   const sigla = normalizarUF(uf);
   return CODIGOS_UF[sigla];
 }
 
-export function obterAutorizadorPorUF(uf: string, contingencia = false): AutorizadorSefaz {
+export function getAutorizadorPorUF(uf: string, contingencia = false): AutorizadorSefaz {
   const sigla = normalizarUF(uf);
   return contingencia ? AUTORIZADOR_CONTINGENCIA_POR_UF[sigla] : AUTORIZADOR_POR_UF[sigla];
 }
 
-export function obterUrlSefaz(
+export function getUrlSefaz(
   uf: string,
   ambiente: AmbienteSefaz,
   servico: ServicoSefaz,
   contingencia = false
 ): string {
-  const autorizador = obterAutorizadorPorUF(uf, contingencia);
+  const autorizador = getAutorizadorPorUF(uf, contingencia);
   const url = URLS_SEFAZ[autorizador]?.[ambiente]?.[servico];
   if (!url) {
     throw new Error(`Serviço "${servico}" não encontrado para o autorizador ${autorizador} (${ambiente}).`);
   }
   return url;
 }
+
+export const obterCodigoUF = getCodigoUF;
+export const obterAutorizadorPorUF = getAutorizadorPorUF;
+export const obterUrlSefaz = getUrlSefaz;
