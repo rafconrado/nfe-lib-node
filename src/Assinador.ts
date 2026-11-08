@@ -57,4 +57,40 @@ export class Assinador {
 
     return sig.getSignedXml();
   }
+
+  public assinarXmlEvento(xmlCru: string): string {
+    const doc = new DOMParser().parseFromString(xmlCru, 'text/xml');
+    const infEvento = doc.getElementsByTagName('infEvento')[0];
+    if (!infEvento) {
+      throw new Error('Tag <infEvento> não encontrada no XML. O XML fornecido não é um evento válido.');
+    }
+
+    const id = infEvento.getAttribute('Id');
+    if (!id) {
+      throw new Error('A tag <infEvento> precisa ter o atributo Id (ex: Id="ID110111...")');
+    }
+
+    const sig = new SignedXml();
+    sig.addReference({
+      xpath: `//*[@Id='${id}']`,
+      transforms: [
+        'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+        'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+      ],
+      digestAlgorithm: 'http://www.w3.org/2000/09/xmldsig#sha1',
+      uri: `#${id}`,
+    });
+
+    sig.privateKey = this.privateKeyPem;
+    sig.signatureAlgorithm = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
+    sig.canonicalizationAlgorithm = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+    sig.publicCert = Buffer.from(this.publicCertPem);
+
+    sig.computeSignature(xmlCru, {
+      prefix: '',
+      location: { reference: `//*[local-name(.)='evento']`, action: 'append' },
+    });
+
+    return sig.getSignedXml();
+  }
 }

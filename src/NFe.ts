@@ -13,7 +13,7 @@ import {
   type ServicoSefaz,
   type SiglaUF,
 } from './webservices.js';
-import { validarChaveAcesso } from './chaveAcesso.js';
+import { extrairDadosChaveAcesso, validarChaveAcesso } from './chaveAcesso.js';
 
 export type { AmbienteSefaz } from './webservices.js';
 
@@ -22,6 +22,23 @@ export interface ConfiguracaoNFe {
   ambiente: AmbienteSefaz;
   certificado: Certificado;
   contingencia?: boolean | undefined;
+}
+
+export interface ParametrosCancelamentoNFe {
+  chave: string;
+  protocolo: string;
+  justificativa: string;
+  cnpjOuCpf?: string | undefined;
+  dhEvento?: string | Date | undefined;
+  nSeqEvento?: number | string | undefined;
+}
+
+export interface ParametrosCartaCorrecaoNFe {
+  chave: string;
+  correcao: string;
+  nSeqEvento?: number | string | undefined;
+  cnpjOuCpf?: string | undefined;
+  dhEvento?: string | Date | undefined;
 }
 
 export class NFe {
@@ -108,10 +125,131 @@ export class NFe {
     };
   }
 
+  public async cancelar(params: ParametrosCancelamentoNFe): Promise<RetornoSefaz> {
+    const protocolo = params.protocolo.trim();
+    if (!protocolo) {
+      throw new Error('O número do protocolo de autorização é obrigatório para o cancelamento.');
+    }
+
+    const justificativa = params.justificativa.trim();
+    if (justificativa.length < 15) {
+      throw new Error('A justificativa de cancelamento deve conter no mínimo 15 caracteres.');
+    }
+
+    return this.enviarEvento({
+      chaveOuId: params.chave,
+      tpEvento: '110111',
+      nSeqEvento: params.nSeqEvento ?? 1,
+      cnpjOuCpf: params.cnpjOuCpf,
+      dhEvento: params.dhEvento,
+      detEvento: {
+        descEvento: 'Cancelamento',
+        nProt: protocolo,
+        xJust: justificativa,
+      },
+    });
+  }
+
+  public async cartaCorrecao(params: ParametrosCartaCorrecaoNFe): Promise<RetornoSefaz> {
+    const correcao = params.correcao.trim();
+    if (correcao.length < 15) {
+      throw new Error('O texto da Carta de Correção deve conter no mínimo 15 caracteres.');
+    }
+
+    const condicaoUso =
+      'A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, de 15 de dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido na emissao de documento fiscal, desde que o erro nao esteja relacionado com: I - as variaveis que determinam o valor do imposto tais como: base de calculo, aliquota, diferenca de preco, quantidade, valor da operacao ou da prestacao; II - a correcao de dados cadastrais que implique mudanca do remetente ou do destinatario; III - a data de emissao ou de saida.';
+
+    return this.enviarEvento({
+      chaveOuId: params.chave,
+      tpEvento: '110110',
+      nSeqEvento: params.nSeqEvento ?? 1,
+      cnpjOuCpf: params.cnpjOuCpf,
+      dhEvento: params.dhEvento,
+      detEvento: {
+        descEvento: 'Carta de Correcao',
+        xCorrecao: correcao,
+        xCondUso: condicaoUso,
+      },
+    });
+  }
+
+  private async enviarEvento(opcoes: {
+    chaveOuId: string;
+    tpEvento: '110111' | '110110';
+    nSeqEvento: number | string;
+    cnpjOuCpf?: string | undefined;
+    dhEvento?: string | Date | undefined;
+    detEvento: Record<string, string>;
+  }): Promise<RetornoSefaz> {
+    const chaveLimpa = opcoes.chaveOuId.trim().replace(/^NFe/i, '');
+    if (!validarChaveAcesso(chaveLimpa)) {
+      throw new Error(`Chave de acesso inválida: "${opcoes.chaveOuId}". Informe uma chave de 44 dígitos com dígito verificador válido.`);
+    }
+
+    const dadosChave = extrairDadosChaveAcesso(chaveLimpa);
+    const nSeq = Number(String(opcoes.nSeqEvento).trim());
+    if (!Number.isInteger(nSeq) || nSeq < 1 || nSeq > 20) {
+      throw new Error('O número sequencial do evento (nSeqEvento) deve ser um inteiro entre 1 e 20.');
+    }
+
+    const docAutor = opcoes.cnpjOuCpf ? opcoes.cnpjOuCpf.replace(/\D/g, '') : dadosChave.cnpj;
+    if (docAutor.length !== 11 && docAutor.length !== 14) {
+      throw new Error('O CNPJ/CPF do autor do evento deve conter 11 (CPF) ou 14 (CNPJ) dígitos.');
+    }
+
+    const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
+    const seqId = String(nSeq).padStart(2, '0');
+    const idEvento = `ID${opcoes.tpEvento}${dadosChave.chave}${seqId}`;
+
+    const infEvento: Record<string, unknown> = {
+      '@Id': idEvento,
+      cOrgao: dadosChave.cUF,
+      tpAmb,
+      ...(docAutor.length === 11 ? { CPF: docAutor } : { CNPJ: docAutor }),
+      chNFe: dadosChave.chave,
+      dhEvento: formatarDataHoraEvento(opcoes.dhEvento),
+      tpEvento: opcoes.tpEvento,
+      nSeqEvento: String(nSeq),
+      verEvento: '1.00',
+      detEvento: {
+        '@versao': '1.00',
+        ...opcoes.detEvento,
+      },
+    };
+
+    const xmlEventoStr = create({
+      evento: {
+        '@xmlns': 'http://www.portalfiscal.inf.br/nfe',
+        '@versao': '1.00',
+        infEvento,
+      },
+    }).end({ prettyPrint: false });
+
+    const xmlAssinado = xmlCruFormatado(
+      this.assinador.assinarXmlEvento(xmlCruFormatado(xmlEventoStr))
+    );
+
+    const idLote = Math.floor(Math.random() * 1000000).toString();
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4"><envEvento versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe"><idLote>${idLote}</idLote>${xmlAssinado}</envEvento></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+    const retorno = await this.enviarSoap(this.getUrl('recepcaoEvento'), xmlBody);
+    const docRetorno = new DOMParser().parseFromString(retorno.xml, 'text/xml');
+    const retEventoNode = docRetorno.getElementsByTagName('retEvento')[0];
+    const xmlProcEvento = retEventoNode
+      ? `<?xml version="1.0" encoding="UTF-8"?><procEventoNFe versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe">${xmlAssinado}${retEventoNode.toString()}</procEventoNFe>`
+      : undefined;
+
+    return {
+      ...retorno,
+      xmlAssinado,
+      xmlProcEvento,
+    };
+  }
+
   private async enviarSoap(url: string, xmlBody: string): Promise<RetornoSefaz> {
     const agent = this.config.certificado.getHttpsAgent();
     try {
-      const response = await axios.post(url, xmlBody, {
+      const response = await axios.post<string>(url, xmlBody, {
         httpsAgent: agent,
         headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
       });
@@ -119,26 +257,34 @@ export class NFe {
       const xmlStr = response.data;
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
 
-      // Tenta pegar o cStat do protocolo primeiro (resultado da nota individual)
-      let cStatNode = doc.getElementsByTagName('infProt')[0]?.getElementsByTagName('cStat')[0];
-      let xMotivoNode = doc.getElementsByTagName('infProt')[0]?.getElementsByTagName('xMotivo')[0];
+      const infProt = doc.getElementsByTagName('infProt')[0];
+      const infEventoRet = doc.getElementsByTagName('retEvento')[0]?.getElementsByTagName('infEvento')[0];
 
-      // Se não tiver protocolo, pega o cStat geral do lote ou do status de serviço
-      if (!cStatNode) {
-        cStatNode = doc.getElementsByTagName('cStat')[0];
-        xMotivoNode = doc.getElementsByTagName('xMotivo')[0];
-      }
+      const cStatNode =
+        infProt?.getElementsByTagName('cStat')[0] ??
+        infEventoRet?.getElementsByTagName('cStat')[0] ??
+        doc.getElementsByTagName('cStat')[0];
 
-      const status = cStatNode && cStatNode.textContent ? parseInt(cStatNode.textContent, 10) : 0;
-      const motivo = xMotivoNode && xMotivoNode.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
+      const xMotivoNode =
+        infProt?.getElementsByTagName('xMotivo')[0] ??
+        infEventoRet?.getElementsByTagName('xMotivo')[0] ??
+        doc.getElementsByTagName('xMotivo')[0];
 
-      // 100 = Autorizado, 104 = Lote Processado, 107 = Serviço em Operação
-      const sucesso = status === 100 || status === 104 || status === 107;
+      const status = cStatNode?.textContent ? parseInt(cStatNode.textContent, 10) : 0;
+      const motivo = xMotivoNode?.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
+
+      const sucesso =
+        status === 100 ||
+        status === 101 ||
+        status === 104 ||
+        status === 107 ||
+        status === 135 ||
+        status === 136;
 
       return { sucesso, status, motivo, xml: xmlStr };
-    } catch (error: any) {
-      if (error.response) {
-        throw new Error(`Erro na SEFAZ: HTTP ${error.response.status} - ${error.response.data}`);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Erro na SEFAZ: HTTP ${error.response.status} - ${String(error.response.data)}`);
       }
       throw error;
     }
@@ -146,6 +292,19 @@ export class NFe {
 }
 
 function xmlCruFormatado(xml: string) {
-  // Evita declarações duplicadas do xmlbuilder2 se houver
   return xml.replace(/^<\?xml[^?]*\?>\s*/i, '').trim();
+}
+
+function formatarDataHoraEvento(data?: string | Date | undefined): string {
+  if (typeof data === 'string' && data.trim().length > 0) {
+    return data.trim();
+  }
+  const d = data instanceof Date ? data : new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offsetMin = -d.getTimezoneOffset();
+  const sinal = offsetMin >= 0 ? '+' : '-';
+  const absMin = Math.abs(offsetMin);
+  const offsetHoras = pad(Math.floor(absMin / 60));
+  const offsetResto = pad(absMin % 60);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${sinal}${offsetHoras}:${offsetResto}`;
 }
