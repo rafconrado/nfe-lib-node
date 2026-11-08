@@ -96,4 +96,43 @@ export class Assinador {
 
     return sig.getSignedXml();
   }
+
+  /**
+   * Assina o XML de Inutilização de Numeração da NF-e (<inutNFe> / <infInut>) no padrão SEFAZ (XMLDSig).
+   */
+  public assinarXmlInutilizacao(xmlCru: string): string {
+    const doc = new DOMParser().parseFromString(xmlCru, 'text/xml');
+    const infInut = doc.getElementsByTagName('infInut')[0];
+    if (!infInut) {
+      throw new Error('Tag <infInut> não encontrada no XML. O XML fornecido não é uma inutilização válida.');
+    }
+
+    const id = infInut.getAttribute('Id');
+    if (!id) {
+      throw new Error('A tag <infInut> precisa ter o atributo Id (ex: Id="ID5326...")');
+    }
+
+    const sig = new SignedXml();
+    sig.addReference({
+      xpath: `//*[@Id='${id}']`,
+      transforms: [
+        'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+        'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+      ],
+      digestAlgorithm: 'http://www.w3.org/2000/09/xmldsig#sha1',
+      uri: `#${id}`,
+    });
+
+    sig.privateKey = this.privateKeyPem;
+    sig.signatureAlgorithm = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
+    sig.canonicalizationAlgorithm = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+    sig.publicCert = Buffer.from(this.publicCertPem);
+
+    sig.computeSignature(xmlCru, {
+      prefix: '',
+      location: { reference: `//*[local-name(.)='inutNFe']`, action: 'append' },
+    });
+
+    return sig.getSignedXml();
+  }
 }

@@ -4,6 +4,7 @@ export type {
   AmbienteSefaz,
   ParametrosCancelamentoNFe,
   ParametrosCartaCorrecaoNFe,
+  ParametrosInutilizacaoNFe,
 } from './NFe.js';
 export { Certificado } from './Certificado.js';
 export type { DadosCertificado } from './Certificado.js';

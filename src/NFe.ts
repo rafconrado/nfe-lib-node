@@ -52,6 +52,23 @@ export interface ParametrosCartaCorrecaoNFe {
   dhEvento?: string | Date | undefined;
 }
 
+export interface ParametrosInutilizacaoNFe {
+  /** CNPJ do emitente (14 dígitos) */
+  cnpj: string;
+  /** Série da numeração a ser inutilizada (0 a 999) */
+  serie: number | string;
+  /** Número inicial da faixa de NF-e a ser inutilizada */
+  numeroInicial: number | string;
+  /** Número final da faixa de NF-e a ser inutilizada (opcional; padrão igual a numeroInicial) */
+  numeroFinal?: number | string | undefined;
+  /** Justificativa do pedido de inutilização (mínimo de 15 caracteres) */
+  justificativa: string;
+  /** Ano de inutilização com 2 ou 4 dígitos (opcional; padrão: ano atual) */
+  ano?: number | string | undefined;
+  /** Modelo do documento fiscal ('55' para NF-e, '65' para NFC-e; padrão: '55') */
+  modelo?: '55' | '65' | number | string | undefined;
+}
+
 export class NFe {
   private config: ConfiguracaoNFe;
   private assinador: Assinador;
@@ -194,6 +211,116 @@ export class NFe {
     });
   }
 
+  /**
+   * Solicita a inutilização de uma faixa de numeração de NF-e/NFC-e na SEFAZ (NFeInutilizacao4).
+   */
+  public async inutilizar(params: ParametrosInutilizacaoNFe): Promise<RetornoSefaz> {
+    const cnpj = params.cnpj.replace(/\D/g, '');
+    if (cnpj.length !== 14) {
+      throw new Error('O CNPJ para inutilização deve conter 14 dígitos numéricos.');
+    }
+
+    const justificativa = params.justificativa.trim();
+    if (justificativa.length < 15) {
+      throw new Error('A justificativa de inutilização deve conter no mínimo 15 caracteres.');
+    }
+
+    const anoRaw =
+      params.ano !== undefined ? String(params.ano).replace(/\D/g, '') : String(new Date().getFullYear());
+    if (anoRaw.length !== 2 && anoRaw.length !== 4) {
+      throw new Error('O ano para inutilização deve conter 2 ou 4 dígitos.');
+    }
+    const ano = anoRaw.slice(-2);
+
+    const mod = String(params.modelo ?? '55').trim();
+    if (mod !== '55' && mod !== '65') {
+      throw new Error('O modelo do documento fiscal deve ser "55" (NF-e) ou "65" (NFC-e).');
+    }
+
+    const serieLimpa = String(params.serie).replace(/\D/g, '');
+    const serieNum = Number(serieLimpa);
+    if (!serieLimpa || !Number.isInteger(serieNum) || serieNum < 0 || serieNum > 999) {
+      throw new Error('A série para inutilização deve ser um número inteiro entre 0 e 999.');
+    }
+
+    const nNFIniLimpo = String(params.numeroInicial).replace(/\D/g, '');
+    const nNFFinLimpo = String(params.numeroFinal ?? params.numeroInicial).replace(/\D/g, '');
+    const nNFIniNum = Number(nNFIniLimpo);
+    const nNFFinNum = Number(nNFFinLimpo);
+
+    if (
+      !nNFIniLimpo ||
+      !nNFFinLimpo ||
+      !Number.isInteger(nNFIniNum) ||
+      !Number.isInteger(nNFFinNum) ||
+      nNFIniNum < 1 ||
+      nNFFinNum < nNFIniNum ||
+      nNFFinLimpo.length > 9
+    ) {
+      throw new Error('A faixa de numeração (numeroInicial e numeroFinal) para inutilização é inválida.');
+    }
+
+    const cUF = this.getCodigoUF();
+    const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
+    const idInut = `ID${cUF}${ano}${cnpj}${mod}${String(serieNum).padStart(3, '0')}${String(nNFIniNum).padStart(9, '0')}${String(nNFFinNum).padStart(9, '0')}`;
+
+    const xmlInutStr = create({
+      inutNFe: {
+        '@xmlns': 'http://www.portalfiscal.inf.br/nfe',
+        '@versao': '4.00',
+        infInut: {
+          '@Id': idInut,
+          tpAmb,
+          xServ: 'INUTILIZAR',
+          cUF,
+          ano,
+          CNPJ: cnpj,
+          mod,
+          serie: String(serieNum),
+          nNFIni: String(nNFIniNum),
+          nNFFin: String(nNFFinNum),
+          xJust: justificativa,
+        },
+      },
+    }).end({ prettyPrint: false });
+
+    const xmlAssinado = xmlCruFormatado(
+      this.assinador.assinarXmlInutilizacao(xmlCruFormatado(xmlInutStr))
+    );
+
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4">${xmlAssinado}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+    const retorno = await this.enviarSoap(this.getUrl('inutilizacao'), xmlBody);
+    const docRetorno = new DOMParser().parseFromString(retorno.xml, 'text/xml');
+    const retInutNode = docRetorno.getElementsByTagName('retInutNFe')[0];
+    const xmlProcInut = retInutNode
+      ? `<?xml version="1.0" encoding="UTF-8"?><ProcInutNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">${xmlAssinado}${retInutNode.toString()}</ProcInutNFe>`
+      : undefined;
+
+    return {
+      ...retorno,
+      xmlAssinado,
+      xmlProcInut,
+    };
+  }
+
+  /**
+   * Consulta o resultado do processamento de um lote de NF-e pelo número do recibo de 15 dígitos (NFeRetAutorizacao4).
+   */
+  public async consultarRecibo(recibo: string): Promise<RetornoSefaz> {
+    const reciboLimpo = recibo.trim().replace(/\D/g, '');
+    if (!/^\d{15}$/.test(reciboLimpo)) {
+      throw new Error(`Número de recibo inválido: "${recibo}". O recibo deve conter exatamente 15 dígitos numéricos.`);
+    }
+
+    const url = this.getUrl('retAutorizacao');
+    const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
+
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRetAutorizacao4"><consReciNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><tpAmb>${tpAmb}</tpAmb><nRec>${reciboLimpo}</nRec></consReciNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+    return this.enviarSoap(url, xmlBody);
+  }
+
   private async enviarEvento(opcoes: {
     chaveOuId: string;
     tpEvento: '110111' | '110110';
@@ -278,28 +405,32 @@ export class NFe {
       const xmlStr = response.data;
       const doc = new DOMParser().parseFromString(xmlStr, 'text/xml');
 
-      // Tenta pegar o cStat do protocolo ou do evento primeiro (resultado individual)
+      // Tenta pegar o cStat do protocolo, evento ou inutilização primeiro (resultado individual)
       const infProt = doc.getElementsByTagName('infProt')[0];
       const infEventoRet = doc.getElementsByTagName('retEvento')[0]?.getElementsByTagName('infEvento')[0];
+      const infInutRet = doc.getElementsByTagName('retInutNFe')[0]?.getElementsByTagName('infInut')[0];
 
-      // Se não tiver protocolo nem evento, pega o cStat geral do lote ou do status de serviço
+      // Se não tiver protocolo, evento ou inutilização, pega o cStat geral do lote ou do status de serviço
       const cStatNode =
         infProt?.getElementsByTagName('cStat')[0] ??
         infEventoRet?.getElementsByTagName('cStat')[0] ??
+        infInutRet?.getElementsByTagName('cStat')[0] ??
         doc.getElementsByTagName('cStat')[0];
 
       const xMotivoNode =
         infProt?.getElementsByTagName('xMotivo')[0] ??
         infEventoRet?.getElementsByTagName('xMotivo')[0] ??
+        infInutRet?.getElementsByTagName('xMotivo')[0] ??
         doc.getElementsByTagName('xMotivo')[0];
 
       const status = cStatNode?.textContent ? parseInt(cStatNode.textContent, 10) : 0;
       const motivo = xMotivoNode?.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
 
-      // 100 = Autorizado, 101 = Cancelamento Homologado, 104 = Lote Processado, 107 = Serviço em Operação, 135/136 = Evento Registrado
+      // 100 = Autorizado, 101 = Cancelamento Homologado, 102 = Inutilização Homologada, 104 = Lote Processado, 107 = Serviço em Operação, 135/136 = Evento Registrado
       const sucesso =
         status === 100 ||
         status === 101 ||
+        status === 102 ||
         status === 104 ||
         status === 107 ||
         status === 135 ||
