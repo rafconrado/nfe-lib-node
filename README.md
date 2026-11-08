@@ -85,7 +85,7 @@ async function emitirNota() {
 ## ✨ Funcionalidades Atuais
 
 * 🔐 **Certificado Digital A1 (`.pfx`)**: Extração com cache em memória, inspeção de validade/titular (`getDados()`, `estaValido()`) e configuração de mTLS.
-* 🔑 **Chave de Acesso (Módulo 11)**: Geração e validação da chave de 44 dígitos e cálculo automático do `cDV` (`gerarChaveAcesso`, `validarChaveAcesso`, `calcularDigitoVerificador`).
+* 🔑 **Chave de Acesso (Módulo 11)**: Geração, validação, extração de dados da chave de 44 dígitos e cálculo automático do `cDV` (`gerarChaveAcesso`, `validarChaveAcesso`, `extrairDadosChaveAcesso`, `calcularDigitoVerificador`).
 * ✍️ **Assinatura Digital XMLDSig**: Assinatura no padrão exigido pela SEFAZ (`rsa-sha1` / `enveloped-signature` / `c14n`).
 * 🗺️ **Mapeamento Completo de WebServices por UF**: Resolução automática das URLs oficiais da NF-e 4.00 para todas as 27 UFs (Autorizadores próprios: AM, BA, GO, MG, MS, MT, PE, PR, RS, SP + SVAN, SVRS e contingência SVC-AN / SVC-RS).
 * 📡 **Comunicação SEFAZ (SOAP 1.2)**: Consulta de status do serviço (`consultarStatus`) e autorização síncrona de NF-e (`emitir`) com geração automática do `<nfeProc>`.
