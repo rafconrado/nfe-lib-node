@@ -13,6 +13,7 @@ import {
   type ServicoSefaz,
   type SiglaUF,
 } from './webservices.js';
+import { validarChaveAcesso } from './chaveAcesso.js';
 
 export type { AmbienteSefaz } from './webservices.js';
 
@@ -54,6 +55,20 @@ export class NFe {
     const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
 
     const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeStatusServico4"><consStatServ versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><tpAmb>${tpAmb}</tpAmb><cUF>${this.getCodigoUF()}</cUF><xServ>STATUS</xServ></consStatServ></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+
+    return this.enviarSoap(url, xmlBody);
+  }
+
+  public async consultarProtocolo(chaveOuId: string): Promise<RetornoSefaz> {
+    const chave = chaveOuId.trim().replace(/^NFe/i, '');
+    if (!validarChaveAcesso(chave)) {
+      throw new Error(`Chave de acesso inválida: "${chaveOuId}". Informe uma chave de 44 dígitos com dígito verificador válido.`);
+    }
+
+    const url = this.getUrl('consultaProtocolo');
+    const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
+
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4"><consSitNFe versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe"><tpAmb>${tpAmb}</tpAmb><xServ>CONSULTAR</xServ><chNFe>${chave}</chNFe></consSitNFe></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 
     return this.enviarSoap(url, xmlBody);
   }
