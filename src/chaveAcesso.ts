@@ -28,6 +28,35 @@ export interface ResultadoChaveAcesso {
   id: `NFe${string}`;
 }
 
+export interface DadosChaveAcesso {
+  /** Chave de acesso limpa com 44 dígitos */
+  chave: string;
+  /** Código IBGE da UF (2 dígitos) */
+  cUF: string;
+  /** Ano e mês de emissão no formato AAMM */
+  aamm: string;
+  /** Ano de emissão com 4 dígitos (ex: '2026') */
+  ano: string;
+  /** Mês de emissão com 2 dígitos (ex: '11') */
+  mes: string;
+  /** CNPJ (ou CPF com zeros à esquerda) de 14 dígitos */
+  cnpj: string;
+  /** Modelo do documento fiscal ('55' ou '65') */
+  modelo: string;
+  /** Série do documento com 3 dígitos */
+  serie: string;
+  /** Número da nota fiscal com 9 dígitos */
+  numero: string;
+  /** Tipo de emissão (1 dígito) */
+  tpEmis: string;
+  /** Código numérico aleatório (8 dígitos) */
+  cNF: string;
+  /** Dígito verificador (1 dígito) */
+  cDV: string;
+  /** Indica se o dígito verificador (Módulo 11) é válido */
+  valida: boolean;
+}
+
 /**
  * Calcula o dígito verificador (cDV) em Módulo 11 a partir dos 43 primeiros dígitos da chave.
  */
@@ -96,6 +125,45 @@ export function validarChaveAcesso(chaveOuId: string): boolean {
   }
   const dvEsperado = calcularDigitoVerificador(limpa.slice(0, 43));
   return limpa[43] === dvEsperado;
+}
+
+/**
+ * Extrai e decompõe os campos que formam uma chave de acesso de 44 dígitos da NF-e/NFC-e.
+ */
+export function extrairDadosChaveAcesso(chaveOuId: string): DadosChaveAcesso {
+  const limpa = chaveOuId.trim().replace(/^NFe/i, '').replace(/\D/g, '');
+  if (limpa.length !== 44) {
+    throw new Error(`A chave de acesso deve conter 44 dígitos (recebido: ${limpa.length}).`);
+  }
+
+  const cUF = limpa.slice(0, 2);
+  const aamm = limpa.slice(2, 6);
+  const ano = `20${aamm.slice(0, 2)}`;
+  const mes = aamm.slice(2, 4);
+  const cnpj = limpa.slice(6, 20);
+  const modelo = limpa.slice(20, 22);
+  const serie = limpa.slice(22, 25);
+  const numero = limpa.slice(25, 34);
+  const tpEmis = limpa.slice(34, 35);
+  const cNF = limpa.slice(35, 43);
+  const cDV = limpa.slice(43, 44);
+  const valida = calcularDigitoVerificador(limpa.slice(0, 43)) === cDV;
+
+  return {
+    chave: limpa,
+    cUF,
+    aamm,
+    ano,
+    mes,
+    cnpj,
+    modelo,
+    serie,
+    numero,
+    tpEmis,
+    cNF,
+    cDV,
+    valida,
+  };
 }
 
 function extrairAnoMes(data: Date | string): string {

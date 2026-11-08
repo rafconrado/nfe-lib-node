@@ -22,10 +22,12 @@ export type {
 } from './webservices.js';
 export {
   calcularDigitoVerificador,
+  extrairDadosChaveAcesso,
   gerarChaveAcesso,
   validarChaveAcesso,
 } from './chaveAcesso.js';
 export type {
+  DadosChaveAcesso,
   ParametrosChaveAcesso,
   ResultadoChaveAcesso,
 } from './chaveAcesso.js';
