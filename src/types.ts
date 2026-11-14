@@ -21,10 +21,10 @@ export interface DadosNFe {
 
 /** Informações da Nota Fiscal Eletrônica (tag `infNFe`). */
 export interface InfNFe {
-  /** Atributo `Id` da nota (ex.: `NFe352609...`). */
-  '@Id': string;
-  /** Versão do layout (ex.: `4.00`). */
-  '@versao': string;
+  /** Atributo `Id` da nota (ex.: `NFe352609...`). Opcional: calculado automaticamente em `nfe.emitir()` se omitido. */
+  '@Id'?: string | undefined;
+  /** Versão do layout (padrão: `4.00`). */
+  '@versao'?: string | undefined;
   /** Identificação da NF-e. */
   ide: Ide;
   /** Identificação do emitente. */
@@ -75,20 +75,20 @@ export interface InfNFe {
 
 /** Identificação da NF-e. */
 export interface Ide {
-  /** Código da UF da tabela do IBGE (ex.: `35` SP, `53` DF). */
-  cUF: string;
-  /** Código numérico que compõe a Chave de Acesso (8 dígitos). */
-  cNF: string;
+  /** Código da UF da tabela do IBGE (ex.: `35` SP, `53` DF). Opcional: preenchido pela UF da instância `NFe` se omitido. */
+  cUF?: string | undefined;
+  /** Código numérico que compõe a Chave de Acesso (8 dígitos). Opcional: gerado automaticamente se omitido. */
+  cNF?: string | undefined;
   /** Descrição da Natureza da Operação (ex.: `VENDA DE MERCADORIA`). */
   natOp: string;
-  /** Modelo: `55` NF-e, `65` NFC-e. */
-  mod: string;
+  /** Modelo: `55` NF-e, `65` NFC-e (padrão: `55`). */
+  mod?: string | undefined;
   /** Série: 0-889 normal, 890-899 Fisco, 900-999 SCAN. */
   serie: string;
   /** Número do documento fiscal. */
   nNF: string;
-  /** Data/hora de emissão `AAAA-MM-DDThh:mm:ssTZD`. */
-  dhEmi: string;
+  /** Data/hora de emissão `AAAA-MM-DDThh:mm:ssTZD`. Opcional: preenchido com a data/hora atual se omitido. */
+  dhEmi?: string | undefined;
   /** Data/hora de saída/entrada da mercadoria. */
   dhSaiEnt?: string;
   /** Data de previsão de entrega (`AAAA-MM-DD`). Não informar para NFC-e. */
@@ -105,10 +105,10 @@ export interface Ide {
   tpImp: string;
   /** Forma de emissão: `1` normal, `2` FS, `3` SCAN, `4` DPEC, `5` FSDA, `6` SVC-AN, `7` SVC-RS, `9` off-line NFC-e. */
   tpEmis: string;
-  /** Dígito verificador da Chave de Acesso. */
-  cDV: string;
-  /** Ambiente: `1` produção, `2` homologação. */
-  tpAmb: string;
+  /** Dígito verificador da Chave de Acesso. Opcional: calculado automaticamente (Módulo 11) se omitido. */
+  cDV?: string | undefined;
+  /** Ambiente: `1` produção, `2` homologação. Opcional: preenchido pelo ambiente da instância `NFe` se omitido. */
+  tpAmb?: string | undefined;
   /** Finalidade: `1` normal, `2` complementar, `3` ajuste, `4` devolução, `5` crédito, `6` débito. */
   finNFe: string;
   /** Tipo de Nota de Débito (01 a 08). */
@@ -2618,6 +2618,8 @@ export interface RetornoSefaz {
   motivo: string;
   /** XML completo do retorno. */
   xml: string;
+  /** Chave de acesso de 44 dígitos da NF-e emitida. */
+  chave?: string | undefined;
   /** XML da NF-e assinado enviado para a SEFAZ. */
   xmlAssinado?: string | undefined;
   /** XML completo distribuível (nfeProc = NFe assinada + protNFe da SEFAZ). */

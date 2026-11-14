@@ -21,7 +21,11 @@ import {
   type ServicoSefaz,
   type SiglaUF,
 } from './webservices.js';
-import { getDadosChaveAcesso, validarChaveAcesso } from './chaveAcesso.js';
+import {
+  gerarChaveAcesso,
+  getDadosChaveAcesso,
+  validarChaveAcesso,
+} from './chaveAcesso.js';
 
 export type { AmbienteSefaz } from './webservices.js';
 
@@ -185,13 +189,17 @@ export class NFe {
   }
 
   /**
-   * Recebe os dados da NFe em formato JS/JSON, converte para XML, assina e envia.
+   * Recebe os dados da NFe em formato JS/JSON, preenche automaticamente Chave de Acesso / cDV / cNF se omitidos,
+   * converte para XML, assina e envia para a SEFAZ.
    */
   public async emitir(dadosNFe: DadosNFe): Promise<RetornoSefaz> {
     const idLote = Math.floor(Math.random() * 1000000).toString();
+    const { dadosNormalizados, chave } = this.normalizarDadosNFe(dadosNFe);
 
-    // 1. Gera o XML da nota a partir do objeto passado pelo usuário
-    const xmlNFeStr = create({ NFe: { '@xmlns': 'http://www.portalfiscal.inf.br/nfe', ...dadosNFe } }).end({ prettyPrint: false });
+    // 1. Gera o XML da nota a partir do objeto normalizado
+    const xmlNFeStr = create({
+      NFe: { '@xmlns': 'http://www.portalfiscal.inf.br/nfe', ...dadosNormalizados },
+    }).end({ prettyPrint: false });
 
     // 2. Assina o XML
     const xmlAssinado = xmlCruFormatado(
@@ -212,9 +220,88 @@ export class NFe {
 
     return {
       ...retorno,
+      chave,
       xmlAssinado,
       xmlNfeProc,
     };
+  }
+
+  private normalizarDadosNFe(dadosNFe: DadosNFe): { dadosNormalizados: DadosNFe; chave: string } {
+    const { infNFe } = dadosNFe;
+    const { ide, emit, ['@Id']: idInformado, ['@versao']: versaoInformada, ...restoInfNFe } = infNFe;
+
+    const cUF = ide.cUF ?? this.getCodigoUF();
+    const mod = ide.mod ?? '55';
+    const tpAmb = ide.tpAmb ?? (this.config.ambiente === 'producao' ? '1' : '2');
+    const dhEmi = ide.dhEmi ?? formatarDataHoraEvento();
+
+    const chaveInformadaLimpa = idInformado?.trim().replace(/^NFe/i, '');
+    const cNF =
+      ide.cNF ??
+      (chaveInformadaLimpa && /^\d{44}$/.test(chaveInformadaLimpa)
+        ? chaveInformadaLimpa.slice(35, 43)
+        : String(Math.floor(10000000 + Math.random() * 90000000)));
+
+    const docEmitente = emit.CNPJ ?? emit.CPF ?? '';
+    const calculada = gerarChaveAcesso({
+      uf: cUF,
+      dataEmissao: dhEmi,
+      cnpjOuCpf: docEmitente,
+      modelo: mod,
+      serie: ide.serie,
+      numero: ide.nNF,
+      tpEmis: ide.tpEmis,
+      cNF,
+    });
+
+    if (idInformado !== undefined && !validarChaveAcesso(idInformado)) {
+      throw new Error(
+        `Chave de acesso inválida em infNFe["@Id"]: "${idInformado}". O dígito verificador correto seria "${calculada.cDV}" (${calculada.id}).`
+      );
+    }
+
+    if (ide.cDV !== undefined && ide.cDV.trim() !== calculada.cDV && idInformado === undefined) {
+      throw new Error(
+        `Dígito verificador (ide.cDV = "${ide.cDV}") inválido. O valor calculado em Módulo 11 é "${calculada.cDV}".`
+      );
+    }
+
+    const chaveFinal = chaveInformadaLimpa ?? calculada.chave;
+    const cDVFinal = ide.cDV ?? chaveFinal.slice(43, 44);
+
+    const ideComDefaults: Record<string, unknown> = {
+      ...ide,
+      cUF,
+      cNF: String(cNF).replace(/\D/g, '').padStart(8, '0'),
+      mod,
+      dhEmi,
+      cDV: cDVFinal,
+      tpAmb,
+    };
+
+    const ideOrdenado: Record<string, unknown> = {};
+    for (const campo of ORDEM_CAMPOS_IDE) {
+      if (ideComDefaults[campo] !== undefined) {
+        ideOrdenado[campo] = ideComDefaults[campo];
+      }
+    }
+    for (const [k, v] of Object.entries(ideComDefaults)) {
+      if (!(k in ideOrdenado) && v !== undefined) {
+        ideOrdenado[k] = v;
+      }
+    }
+
+    const dadosNormalizados: DadosNFe = {
+      infNFe: {
+        '@Id': `NFe${chaveFinal}`,
+        '@versao': versaoInformada ?? '4.00',
+        ide: ideOrdenado as unknown as DadosNFe['infNFe']['ide'],
+        emit,
+        ...restoInfNFe,
+      },
+    };
+
+    return { dadosNormalizados, chave: chaveFinal };
   }
 
   /**
@@ -674,6 +761,40 @@ export function descompactarDocZip(conteudoBase64: string): string {
   const bufferCompactado = Buffer.from(conteudoBase64.trim(), 'base64');
   return gunzipSync(bufferCompactado).toString('utf-8');
 }
+
+const ORDEM_CAMPOS_IDE: readonly string[] = [
+  'cUF',
+  'cNF',
+  'natOp',
+  'mod',
+  'serie',
+  'nNF',
+  'dhEmi',
+  'dhSaiEnt',
+  'dPrevEntrega',
+  'tpNF',
+  'idDest',
+  'cMunFG',
+  'cMunFGIBS',
+  'tpImp',
+  'tpEmis',
+  'cDV',
+  'tpAmb',
+  'finNFe',
+  'tpNFDebito',
+  'tpNFCredito',
+  'indFinal',
+  'indPres',
+  'indIntermed',
+  'cIndOp',
+  'procEmi',
+  'verProc',
+  'dhCont',
+  'xJust',
+  'NFref',
+  'gCompraGov',
+  'gPagAntecipado',
+];
 
 function xmlCruFormatado(xml: string) {
   // Evita declarações duplicadas do xmlbuilder2 se houver

@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { gzipSync } from 'node:zlib';
+import { deflateSync, gzipSync } from 'node:zlib';
 import {
   NFe,
+  Danfe,
   descompactarDocZip,
   gerarChaveAcesso,
   getUrlAmbienteNacional,
@@ -183,5 +184,100 @@ describe('NFe (Operações SOAP, Eventos, Manifestação e Distribuição DF-e)'
     assert.equal(inut.sucesso, true);
     assert.match(ultimoXml, /Id="ID53261122233300018155001000000010000000012"/);
     assert.match(inut.xmlProcInut ?? '', /<ProcInutNFe/);
+  });
+
+  it('deve preencher automaticamente @Id, cDV, cNF, cUF e tpAmb em nfe.emitir() quando omitidos', async () => {
+    const nfe = new NFe({ uf: 'DF', ambiente: 'homologacao', certificado });
+
+    (nfe as unknown as { enviarSoap: (u: string, x: string) => Promise<unknown> }).enviarSoap =
+      async () => ({
+        sucesso: true,
+        status: 100,
+        motivo: 'Autorizado o uso da NF-e',
+        xml: '<retEnviNFe versao="4.00"><protNFe versao="4.00"><infProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo><nProt>153260000000001</nProt></infProt></protNFe></retEnviNFe>',
+      });
+
+    const emissao = await nfe.emitir({
+      infNFe: {
+        ide: {
+          natOp: 'VENDA',
+          serie: '1',
+          nNF: '25',
+          dhEmi: '2026-11-14T08:00:00-03:00',
+          tpNF: '1',
+          idDest: '1',
+          cMunFG: '5300108',
+          tpImp: '1',
+          tpEmis: '1',
+          finNFe: '1',
+          indFinal: '1',
+          indPres: '1',
+          procEmi: '0',
+          verProc: '1.0.0',
+        },
+        emit: {
+          CNPJ: '11222333000181',
+          xNome: 'EMITENTE LTDA',
+          enderEmit: {
+            xLgr: 'Rua A',
+            nro: '1',
+            xBairro: 'Centro',
+            cMun: '5300108',
+            xMun: 'Brasilia',
+            UF: 'DF',
+            CEP: '70000000',
+          },
+          IE: '123456',
+          CRT: '1',
+        },
+        det: [],
+        total: {
+          ICMSTot: {
+            vBC: '0.00', vICMS: '0.00', vICMSDeson: '0.00', vFCP: '0.00',
+            vBCST: '0.00', vST: '0.00', vFCPST: '0.00', vFCPSTRet: '0.00',
+            vProd: '0.00', vFrete: '0.00', vSeg: '0.00', vDesc: '0.00',
+            vII: '0.00', vIPI: '0.00', vIPIDevol: '0.00', vPIS: '0.00',
+            vCOFINS: '0.00', vOutro: '0.00', vNF: '0.00',
+          },
+        },
+        transp: { modFrete: '9' },
+        pag: { detPag: [{ tPag: '01', vPag: '0.00' }] },
+      },
+    });
+
+    assert.equal(emissao.sucesso, true);
+    assert.equal(emissao.chave?.length, 44);
+    assert.match(emissao.xmlAssinado ?? '', new RegExp(`Id="NFe${emissao.chave}"`));
+    assert.match(emissao.xmlAssinado ?? '', /<cUF>53<\/cUF><cNF>\d{8}<\/cNF><natOp>VENDA<\/natOp><mod>55<\/mod>/);
+    assert.match(emissao.xmlNfeProc ?? '', /<nfeProc/);
+
+    // Testa geração de DANFE com logo PNG embutida
+    const ihdrData = Buffer.alloc(13);
+    ihdrData.writeUInt32BE(2, 0);
+    ihdrData.writeUInt32BE(2, 4);
+    ihdrData[8] = 8; // bitDepth 8
+    ihdrData[9] = 2; // RGB
+    const rawScanlines = Buffer.from([
+      0, 255, 0, 0, 0, 255, 0,
+      0, 0, 0, 255, 255, 255, 0,
+    ]);
+    const idatData = deflateSync(rawScanlines);
+    const makeChunk = (type: string, data: Buffer) => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
+      return Buffer.concat([len, Buffer.from(type, 'ascii'), data, Buffer.alloc(4)]);
+    };
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      makeChunk('IHDR', ihdrData),
+      makeChunk('IDAT', idatData),
+      makeChunk('IEND', Buffer.alloc(0)),
+    ]);
+
+    const pdfComLogo = Danfe.fromXml(emissao.xmlNfeProc!, { logo: pngBuffer });
+    const pdfStr = pdfComLogo.toString('latin1');
+    assert.match(pdfStr, /^%PDF-1\.4/);
+    assert.match(pdfStr, /\/Subtype \/Image/);
+    assert.match(pdfStr, /\/Im1 Do/);
   });
 });

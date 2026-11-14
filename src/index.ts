@@ -13,6 +13,7 @@ export { Certificado } from './Certificado.js';
 export type { DadosCertificado } from './Certificado.js';
 export { Assinador } from './Assinador.js';
 export { Danfe } from './Danfe.js';
+export type { OpcoesDanfe } from './Danfe.js';
 export {
   AUTORIZADOR_CONTINGENCIA_POR_UF,
   AUTORIZADOR_POR_UF,
