@@ -24,7 +24,7 @@ async function rodarEmissao() {
     // =========================================================================
     // DADOS DA NOTA FISCAL
     // =========================================================================
-    const chaveAcesso = '53260999999999999999550010000000011847291638';
+    const chaveAcesso = '53260999999999999999550010000000011847291634';
 
     const dadosNota: DadosNFe = {
       infNFe: {
@@ -43,7 +43,7 @@ async function rodarEmissao() {
           cMunFG: '5300108', // Brasília
           tpImp: '1', // 1=Retrato
           tpEmis: '1', // 1=Normal
-          cDV: '8',
+          cDV: '4',
           tpAmb: '2', // 2=Homologação
           finNFe: '1', // 1=Normal
           indFinal: '1', // 1=Consumidor Final

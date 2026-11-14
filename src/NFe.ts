@@ -5,8 +5,10 @@ import { create } from 'xmlbuilder2';
 import type { DadosNFe, RetornoSefaz } from './types.js';
 import { DOMParser } from '@xmldom/xmldom';
 import {
+  CODIGO_ORGAO_AMBIENTE_NACIONAL,
   getAutorizadorPorUF,
   getCodigoUF,
+  getUrlAmbienteNacional,
   getUrlSefaz,
   type AmbienteSefaz,
   type AutorizadorSefaz,
@@ -68,6 +70,45 @@ export interface ParametrosInutilizacaoNFe {
   /** Modelo do documento fiscal ('55' para NF-e, '65' para NFC-e; padrão: '55') */
   modelo?: '55' | '65' | number | string | undefined;
 }
+
+export type TipoManifestacao =
+  | 'confirmacao'
+  | 'ciencia'
+  | 'desconhecimento'
+  | 'nao_realizada'
+  | '210200'
+  | '210210'
+  | '210220'
+  | '210240';
+
+export interface ParametrosManifestacaoNFe {
+  /** Chave de acesso de 44 dígitos da NF-e (com ou sem o prefixo 'NFe') */
+  chave: string;
+  /** Tipo de manifestação ('ciencia' | 'confirmacao' | 'desconhecimento' | 'nao_realizada' ou '210200' | '210210' | '210220' | '210240') */
+  tipo: TipoManifestacao;
+  /** Justificativa da manifestação (obrigatória apenas para 'nao_realizada' / '210240', entre 15 e 255 caracteres) */
+  justificativa?: string | undefined;
+  /** CNPJ ou CPF do destinatário autor do evento (opcional; padrão: extraído do Certificado A1) */
+  cnpjOuCpf?: string | undefined;
+  /** Data e hora do evento (opcional; padrão: data/hora atual no formato ISO com timezone) */
+  dhEvento?: string | Date | undefined;
+  /** Número sequencial do evento (opcional; padrão: 1) */
+  nSeqEvento?: number | string | undefined;
+}
+
+const MAPA_MANIFESTACAO: Record<
+  TipoManifestacao,
+  { tpEvento: '210200' | '210210' | '210220' | '210240'; descEvento: string }
+> = {
+  confirmacao: { tpEvento: '210200', descEvento: 'Confirmacao da Operacao' },
+  '210200': { tpEvento: '210200', descEvento: 'Confirmacao da Operacao' },
+  ciencia: { tpEvento: '210210', descEvento: 'Ciencia da Operacao' },
+  '210210': { tpEvento: '210210', descEvento: 'Ciencia da Operacao' },
+  desconhecimento: { tpEvento: '210220', descEvento: 'Desconhecimento da Operacao' },
+  '210220': { tpEvento: '210220', descEvento: 'Desconhecimento da Operacao' },
+  nao_realizada: { tpEvento: '210240', descEvento: 'Operacao nao Realizada' },
+  '210240': { tpEvento: '210240', descEvento: 'Operacao nao Realizada' },
+};
 
 export class NFe {
   private config: ConfiguracaoNFe;
@@ -321,12 +362,68 @@ export class NFe {
     return this.enviarSoap(url, xmlBody);
   }
 
+  /**
+   * Registra um evento de Manifestação do Destinatário no Ambiente Nacional (AN - cOrgao 91).
+   * Suporta Ciência da Operação (210210), Confirmação da Operação (210200),
+   * Desconhecimento da Operação (210220) e Operação não Realizada (210240).
+   */
+  public async manifestar(params: ParametrosManifestacaoNFe): Promise<RetornoSefaz> {
+    const configEvento = MAPA_MANIFESTACAO[params.tipo];
+    if (!configEvento) {
+      throw new Error(
+        `Tipo de manifestação inválido: "${String(params.tipo)}". Utilize "ciencia" (210210), "confirmacao" (210200), "desconhecimento" (210220) ou "nao_realizada" (210240).`
+      );
+    }
+
+    let docAutor = params.cnpjOuCpf?.replace(/\D/g, '');
+    if (!docAutor) {
+      try {
+        docAutor = this.config.certificado.getDados().cnpjOuCpf?.replace(/\D/g, '');
+      } catch {
+        // Ignora erro caso o certificado não permita extração automática do documento
+      }
+    }
+
+    if (!docAutor || (docAutor.length !== 11 && docAutor.length !== 14)) {
+      throw new Error(
+        'Não foi possível identificar o CNPJ/CPF do destinatário automaticamente pelo certificado. Informe um "cnpjOuCpf" válido (11 ou 14 dígitos) nos parâmetros da manifestação.'
+      );
+    }
+
+    const detEvento: Record<string, string> = {
+      descEvento: configEvento.descEvento,
+    };
+
+    if (configEvento.tpEvento === '210240') {
+      const justificativa = params.justificativa?.trim() ?? '';
+      if (justificativa.length < 15 || justificativa.length > 255) {
+        throw new Error(
+          'A justificativa é obrigatória para o evento de Operação não Realizada (210240) e deve conter entre 15 e 255 caracteres.'
+        );
+      }
+      detEvento.xJust = justificativa;
+    }
+
+    return this.enviarEvento({
+      chaveOuId: params.chave,
+      tpEvento: configEvento.tpEvento,
+      nSeqEvento: params.nSeqEvento ?? 1,
+      cnpjOuCpf: docAutor,
+      dhEvento: params.dhEvento,
+      cOrgao: CODIGO_ORGAO_AMBIENTE_NACIONAL,
+      url: getUrlAmbienteNacional(this.config.ambiente, 'recepcaoEvento'),
+      detEvento,
+    });
+  }
+
   private async enviarEvento(opcoes: {
     chaveOuId: string;
-    tpEvento: '110111' | '110110';
+    tpEvento: '110111' | '110110' | '210200' | '210210' | '210220' | '210240';
     nSeqEvento: number | string;
     cnpjOuCpf?: string | undefined;
     dhEvento?: string | Date | undefined;
+    cOrgao?: string | undefined;
+    url?: string | undefined;
     detEvento: Record<string, string>;
   }): Promise<RetornoSefaz> {
     const chaveLimpa = opcoes.chaveOuId.trim().replace(/^NFe/i, '');
@@ -351,7 +448,7 @@ export class NFe {
 
     const infEvento: Record<string, unknown> = {
       '@Id': idEvento,
-      cOrgao: dadosChave.cUF,
+      cOrgao: opcoes.cOrgao ?? dadosChave.cUF,
       tpAmb,
       ...(docAutor.length === 11 ? { CPF: docAutor } : { CNPJ: docAutor }),
       chNFe: dadosChave.chave,
@@ -380,7 +477,8 @@ export class NFe {
     const idLote = Math.floor(Math.random() * 1000000).toString();
     const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4"><envEvento versao="1.00" xmlns="http://www.portalfiscal.inf.br/nfe"><idLote>${idLote}</idLote>${xmlAssinado}</envEvento></nfeDadosMsg></soap12:Body></soap12:Envelope>`;
 
-    const retorno = await this.enviarSoap(this.getUrl('recepcaoEvento'), xmlBody);
+    const urlDestino = opcoes.url ?? this.getUrl('recepcaoEvento');
+    const retorno = await this.enviarSoap(urlDestino, xmlBody);
     const docRetorno = new DOMParser().parseFromString(retorno.xml, 'text/xml');
     const retEventoNode = docRetorno.getElementsByTagName('retEvento')[0];
     const xmlProcEvento = retEventoNode

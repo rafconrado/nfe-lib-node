@@ -53,7 +53,23 @@ export type ServicoSefaz =
   | 'inutilizacao'
   | 'recepcaoEvento';
 
+export type ServicoAmbienteNacional = 'recepcaoEvento' | 'distribuicaoDFe';
+
 export type MapaServicosSefaz = Record<ServicoSefaz, string>;
+export type MapaServicosAmbienteNacional = Record<ServicoAmbienteNacional, string>;
+
+export const CODIGO_ORGAO_AMBIENTE_NACIONAL = '91';
+
+export const URLS_AMBIENTE_NACIONAL: Record<AmbienteSefaz, MapaServicosAmbienteNacional> = {
+  producao: {
+    recepcaoEvento: 'https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx',
+    distribuicaoDFe: 'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
+  },
+  homologacao: {
+    recepcaoEvento: 'https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx',
+    distribuicaoDFe: 'https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx',
+  },
+};
 
 export const CODIGOS_UF: Record<SiglaUF, string> = {
   AC: '12',
@@ -432,6 +448,18 @@ export function getUrlSefaz(
   return url;
 }
 
+export function getUrlAmbienteNacional(
+  ambiente: AmbienteSefaz,
+  servico: ServicoAmbienteNacional
+): string {
+  const url = URLS_AMBIENTE_NACIONAL[ambiente]?.[servico];
+  if (!url) {
+    throw new Error(`Serviço "${servico}" não encontrado para o Ambiente Nacional (${ambiente}).`);
+  }
+  return url;
+}
+
 export const obterCodigoUF = getCodigoUF;
 export const obterAutorizadorPorUF = getAutorizadorPorUF;
 export const obterUrlSefaz = getUrlSefaz;
+export const obterUrlAmbienteNacional = getUrlAmbienteNacional;

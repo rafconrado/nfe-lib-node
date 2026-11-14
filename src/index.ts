@@ -5,6 +5,8 @@ export type {
   ParametrosCancelamentoNFe,
   ParametrosCartaCorrecaoNFe,
   ParametrosInutilizacaoNFe,
+  ParametrosManifestacaoNFe,
+  TipoManifestacao,
 } from './NFe.js';
 export { Certificado } from './Certificado.js';
 export type { DadosCertificado } from './Certificado.js';
@@ -14,18 +16,24 @@ export {
   AUTORIZADOR_CONTINGENCIA_POR_UF,
   AUTORIZADOR_POR_UF,
   CODIGOS_UF,
+  CODIGO_ORGAO_AMBIENTE_NACIONAL,
+  URLS_AMBIENTE_NACIONAL,
   URLS_SEFAZ,
   getAutorizadorPorUF,
   getCodigoUF,
+  getUrlAmbienteNacional,
   getUrlSefaz,
   normalizarUF,
   obterAutorizadorPorUF,
   obterCodigoUF,
+  obterUrlAmbienteNacional,
   obterUrlSefaz,
 } from './webservices.js';
 export type {
   AutorizadorSefaz,
+  MapaServicosAmbienteNacional,
   MapaServicosSefaz,
+  ServicoAmbienteNacional,
   ServicoSefaz,
   SiglaUF,
 } from './webservices.js';

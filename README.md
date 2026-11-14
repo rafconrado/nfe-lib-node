@@ -82,7 +82,7 @@ async function emitirNota() {
 }
 ```
 
-### 3. Consultar Protocolo, Recibo, Cancelar, Carta de Correção e Inutilizar Numeração
+### 3. Consultar Protocolo, Recibo, Cancelar, Carta de Correção, Inutilizar e Manifestar
 
 ```typescript
 import { NFe, Certificado } from 'nfe-lib-node';
@@ -92,7 +92,7 @@ async function gerenciarNotas() {
   const certificado = new Certificado(fs.readFileSync('./certificado.pfx'), 'SENHA_DO_CERTIFICADO');
   const nfe = new NFe({ uf: 'DF', ambiente: 'homologacao', certificado });
 
-  const chave = '53260999999999999999550010000000011847291638';
+  const chave = '53260999999999999999550010000000011847291634';
 
   // 1. Consulta de Protocolo por Chave de Acesso (NFeConsultaProtocolo4)
   const consulta = await nfe.consultarProtocolo(chave);
@@ -127,6 +127,13 @@ async function gerenciarNotas() {
     justificativa: 'Quebra de sequencia na numeracao do sistema emissor.',
   });
   console.log(`Inutilização: ${inutilizacao.status} - ${inutilizacao.motivo}`);
+
+  // 6. Manifestação do Destinatário no Ambiente Nacional (210210, 210200, 210220, 210240)
+  const ciencia = await nfe.manifestar({
+    chave,
+    tipo: 'ciencia', // 'ciencia' | 'confirmacao' | 'desconhecimento' | 'nao_realizada'
+  });
+  console.log(`Manifestação: ${ciencia.status} - ${ciencia.motivo}`);
 }
 ```
 
@@ -135,8 +142,8 @@ async function gerenciarNotas() {
 * 🔐 **Certificado Digital A1 (`.pfx`)**: Extração com cache em memória, inspeção de validade/titular (`getDados()`, `estaValido()`) e configuração de mTLS.
 * 🔑 **Chave de Acesso (Módulo 11)**: Geração, validação, extração de dados da chave de 44 dígitos e cálculo automático do `cDV` (`gerarChaveAcesso`, `validarChaveAcesso`, `getDadosChaveAcesso`, `getDigitoVerificador`).
 * ✍️ **Assinatura Digital XMLDSig**: Assinatura no padrão exigido pela SEFAZ (`rsa-sha1` / `enveloped-signature` / `c14n`) para NF-e, Eventos e Inutilização (`assinarXmlNFe`, `assinarXmlEvento`, `assinarXmlInutilizacao`).
-* 🗺️ **Mapeamento Completo de WebServices por UF**: Resolução automática das URLs oficiais da NF-e 4.00 para todas as 27 UFs (`getUrlSefaz`, `getAutorizadorPorUF`, `getCodigoUF` — Autorizadores próprios: AM, BA, GO, MG, MS, MT, PE, PR, RS, SP + SVAN, SVRS e contingência SVC-AN / SVC-RS).
-* 📡 **Comunicação SEFAZ Completa (SOAP 1.2)**: Consulta de status (`consultarStatus`), autorização síncrona (`emitir`), consulta de protocolo por chave (`consultarProtocolo`), consulta de recibo (`consultarRecibo`), cancelamento (`cancelar`), carta de correção (`cartaCorrecao`) e inutilização de numeração (`inutilizar`), com montagem automática de `<nfeProc>`, `<procEventoNFe>` e `<ProcInutNFe>`.
+* 🗺️ **Mapeamento Completo de WebServices por UF e Ambiente Nacional**: Resolução automática das URLs oficiais da NF-e 4.00 para todas as 27 UFs e Ambiente Nacional (`getUrlSefaz`, `getUrlAmbienteNacional`, `getAutorizadorPorUF`, `getCodigoUF` — Autorizadores próprios: AM, BA, GO, MG, MS, MT, PE, PR, RS, SP + SVAN, SVRS, AN e contingência SVC-AN / SVC-RS).
+* 📡 **Comunicação SEFAZ Completa (SOAP 1.2)**: Consulta de status (`consultarStatus`), autorização síncrona (`emitir`), consulta de protocolo por chave (`consultarProtocolo`), consulta de recibo (`consultarRecibo`), cancelamento (`cancelar`), carta de correção (`cartaCorrecao`), inutilização de numeração (`inutilizar`) e manifestação do destinatário (`manifestar`), com montagem automática de `<nfeProc>`, `<procEventoNFe>` e `<ProcInutNFe>`.
 * 📄 **Gerador de DANFE em PDF**: Geração nativa de PDF com código de barras `Code128C` via `Danfe.fromXml()`.
 * 📘 **Tipagem TypeScript Completa**: Interfaces completas da NF-e / NFC-e 4.00 (incluindo os novos grupos de IBS/CBS da Reforma Tributária).
 
@@ -147,7 +154,7 @@ async function gerenciarNotas() {
 
 ## 🤝 Contribuições
 
-As próximas etapas envolvem suporte a Distribuição de DF-e (`NFeDistribuicaoDFe`), Manifestação do Destinatário e geração de QR-Code para NFC-e (Modelo 65). Toda contribuição da comunidade Node.js brasileira é bem-vinda!
+As próximas etapas envolvem suporte a Distribuição de DF-e (`NFeDistribuicaoDFe`) e geração de QR-Code para NFC-e (Modelo 65). Toda contribuição da comunidade Node.js brasileira é bem-vinda!
 
 ## 👨‍💻 Autor
 
