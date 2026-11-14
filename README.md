@@ -82,7 +82,7 @@ async function emitirNota() {
 }
 ```
 
-### 3. Consultar Protocolo, Recibo, Cancelar, Carta de Correção, Inutilizar e Manifestar
+### 3. Consultar Protocolo, Recibo, Cancelar, Carta de Correção, Inutilizar, Manifestar e Baixar DF-e
 
 ```typescript
 import { NFe, Certificado } from 'nfe-lib-node';
@@ -134,6 +134,13 @@ async function gerenciarNotas() {
     tipo: 'ciencia', // 'ciencia' | 'confirmacao' | 'desconhecimento' | 'nao_realizada'
   });
   console.log(`Manifestação: ${ciencia.status} - ${ciencia.motivo}`);
+
+  // 7. Distribuição de DF-e (NFeDistribuicaoDFe) com descompactação automática de <docZip>
+  const dist = await nfe.distribuicaoDFe({ ultimoNSU: 0 });
+  console.log(`DistDFe: ${dist.status} (${dist.documentos.length} docs | maxNSU: ${dist.maxNSU})`);
+  for (const doc of dist.documentos) {
+    console.log(`NSU ${doc.nsu} [${doc.schema}]:`, doc.xml);
+  }
 }
 ```
 
@@ -143,7 +150,7 @@ async function gerenciarNotas() {
 * 🔑 **Chave de Acesso (Módulo 11)**: Geração, validação, extração de dados da chave de 44 dígitos e cálculo automático do `cDV` (`gerarChaveAcesso`, `validarChaveAcesso`, `getDadosChaveAcesso`, `getDigitoVerificador`).
 * ✍️ **Assinatura Digital XMLDSig**: Assinatura no padrão exigido pela SEFAZ (`rsa-sha1` / `enveloped-signature` / `c14n`) para NF-e, Eventos e Inutilização (`assinarXmlNFe`, `assinarXmlEvento`, `assinarXmlInutilizacao`).
 * 🗺️ **Mapeamento Completo de WebServices por UF e Ambiente Nacional**: Resolução automática das URLs oficiais da NF-e 4.00 para todas as 27 UFs e Ambiente Nacional (`getUrlSefaz`, `getUrlAmbienteNacional`, `getAutorizadorPorUF`, `getCodigoUF` — Autorizadores próprios: AM, BA, GO, MG, MS, MT, PE, PR, RS, SP + SVAN, SVRS, AN e contingência SVC-AN / SVC-RS).
-* 📡 **Comunicação SEFAZ Completa (SOAP 1.2)**: Consulta de status (`consultarStatus`), autorização síncrona (`emitir`), consulta de protocolo por chave (`consultarProtocolo`), consulta de recibo (`consultarRecibo`), cancelamento (`cancelar`), carta de correção (`cartaCorrecao`), inutilização de numeração (`inutilizar`) e manifestação do destinatário (`manifestar`), com montagem automática de `<nfeProc>`, `<procEventoNFe>` e `<ProcInutNFe>`.
+* 📡 **Comunicação SEFAZ Completa (SOAP 1.2)**: Consulta de status (`consultarStatus`), autorização síncrona (`emitir`), consulta de protocolo por chave (`consultarProtocolo`), consulta de recibo (`consultarRecibo`), cancelamento (`cancelar`), carta de correção (`cartaCorrecao`), inutilização de numeração (`inutilizar`), manifestação do destinatário (`manifestar`) e distribuição de DF-e (`distribuicaoDFe`), com montagem automática de `<nfeProc>`, `<procEventoNFe>`, `<ProcInutNFe>` e descompactação nativa GZip de `<docZip>`.
 * 📄 **Gerador de DANFE em PDF**: Geração nativa de PDF com código de barras `Code128C` via `Danfe.fromXml()`.
 * 📘 **Tipagem TypeScript Completa**: Interfaces completas da NF-e / NFC-e 4.00 (incluindo os novos grupos de IBS/CBS da Reforma Tributária).
 
@@ -154,7 +161,7 @@ async function gerenciarNotas() {
 
 ## 🤝 Contribuições
 
-As próximas etapas envolvem suporte a Distribuição de DF-e (`NFeDistribuicaoDFe`) e geração de QR-Code para NFC-e (Modelo 65). Toda contribuição da comunidade Node.js brasileira é bem-vinda!
+As próximas etapas envolvem geração de QR-Code para NFC-e (Modelo 65) e impressão de DANFCE. Toda contribuição da comunidade Node.js brasileira é bem-vinda!
 
 ## 👨‍💻 Autor
 

@@ -2628,3 +2628,26 @@ export interface RetornoSefaz {
   xmlProcInut?: string | undefined;
 }
 
+/** Documento fiscal ou evento descompactado retornado pelo serviço NFeDistribuicaoDFe. */
+export interface DocumentoDistribuicaoDFe {
+  /** Número Sequencial Único (15 dígitos) do documento no Ambiente Nacional. */
+  nsu: string;
+  /** Schema do documento retornado (ex.: `resNFe_v1.01.xsd`, `procNFe_v4.00.xsd`, `procEventoNFe_v1.00.xsd`). */
+  schema: string;
+  /** Conteúdo XML descompactado em texto (UTF-8). */
+  xml: string;
+  /** Conteúdo original compactado em GZip + Base64 contido na tag `<docZip>`. */
+  conteudoBase64: string;
+}
+
+/** Resultado da consulta de Distribuição de DF-e (NFeDistribuicaoDFe). */
+export interface RetornoDistribuicaoDFe extends RetornoSefaz {
+  /** Último NSU pesquisado no Ambiente Nacional (15 dígitos). */
+  ultNSU?: string | undefined;
+  /** Maior NSU existente no Ambiente Nacional para o CNPJ/CPF no momento da consulta (15 dígitos). */
+  maxNSU?: string | undefined;
+  /** Lista de documentos fiscais e eventos descompactados retornados no lote (`<loteDistDFeInt>`). */
+  documentos: DocumentoDistribuicaoDFe[];
+}
+
+

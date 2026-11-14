@@ -1,8 +1,14 @@
 import axios from 'axios';
+import { gunzipSync } from 'zlib';
 import { Certificado } from './Certificado.js';
 import { Assinador } from './Assinador.js';
 import { create } from 'xmlbuilder2';
-import type { DadosNFe, RetornoSefaz } from './types.js';
+import type {
+  DadosNFe,
+  DocumentoDistribuicaoDFe,
+  RetornoDistribuicaoDFe,
+  RetornoSefaz,
+} from './types.js';
 import { DOMParser } from '@xmldom/xmldom';
 import {
   CODIGO_ORGAO_AMBIENTE_NACIONAL,
@@ -38,7 +44,7 @@ export interface ParametrosCancelamentoNFe {
   /** Data e hora do evento (opcional; padrão: data/hora atual no formato ISO com timezone) */
   dhEvento?: string | Date | undefined;
   /** Número sequencial do evento (opcional; padrão: 1) */
-  nSeqEvento?: number | string | undefined;
+  nSeqEvento?: number | undefined | string;
 }
 
 export interface ParametrosCartaCorrecaoNFe {
@@ -94,6 +100,19 @@ export interface ParametrosManifestacaoNFe {
   dhEvento?: string | Date | undefined;
   /** Número sequencial do evento (opcional; padrão: 1) */
   nSeqEvento?: number | string | undefined;
+}
+
+export interface ParametrosDistribuicaoDFe {
+  /** Último NSU recebido para consultar novos documentos a partir dele (ex: '0' ou '000000000000000'; padrão: '000000000000000') */
+  ultimoNSU?: number | string | undefined;
+  /** NSU específico de 15 dígitos para consulta pontual (consNSU) */
+  nsu?: number | string | undefined;
+  /** Chave de acesso de 44 dígitos para consulta pontual de NF-e (consChNFe) */
+  chave?: string | undefined;
+  /** CNPJ (14 dígitos) ou CPF (11 dígitos) do interessado (opcional; padrão: extraído do Certificado A1) */
+  cnpjOuCpf?: string | undefined;
+  /** UF do autor da consulta (opcional; padrão: UF configurada na instância da classe NFe) */
+  ufAutor?: SiglaUF | (string & {}) | undefined;
 }
 
 const MAPA_MANIFESTACAO: Record<
@@ -416,6 +435,108 @@ export class NFe {
     });
   }
 
+  /**
+   * Consulta documentos fiscais eletrônicos (NF-e e Eventos) destinados ao CNPJ/CPF no Ambiente Nacional (NFeDistribuicaoDFe).
+   * Descompacta automaticamente todos os arquivos GZip retornados em `<docZip>`.
+   */
+  public async distribuicaoDFe(params: ParametrosDistribuicaoDFe = {}): Promise<RetornoDistribuicaoDFe> {
+    const modosInformados = [
+      params.ultimoNSU !== undefined,
+      params.nsu !== undefined,
+      params.chave !== undefined,
+    ].filter(Boolean).length;
+
+    if (modosInformados > 1) {
+      throw new Error(
+        'Informe apenas um modo de consulta por chamada em distribuicaoDFe: "ultimoNSU", "nsu" ou "chave".'
+      );
+    }
+
+    let docAutor = params.cnpjOuCpf?.replace(/\D/g, '');
+    if (!docAutor) {
+      try {
+        docAutor = this.config.certificado.getDados().cnpjOuCpf?.replace(/\D/g, '');
+      } catch {
+        // Ignora erro caso o certificado não permita extração automática do documento
+      }
+    }
+
+    if (!docAutor || (docAutor.length !== 11 && docAutor.length !== 14)) {
+      throw new Error(
+        'Não foi possível identificar o CNPJ/CPF do interessado automaticamente pelo certificado. Informe um "cnpjOuCpf" válido (11 ou 14 dígitos) nos parâmetros de distribuicaoDFe.'
+      );
+    }
+
+    const cUFAutor = params.ufAutor ? getCodigoUF(params.ufAutor) : this.getCodigoUF();
+    const tpAmb = this.config.ambiente === 'producao' ? '1' : '2';
+
+    const distDFeInt: Record<string, unknown> = {
+      '@versao': '1.01',
+      '@xmlns': 'http://www.portalfiscal.inf.br/nfe',
+      tpAmb,
+      cUFAutor,
+      ...(docAutor.length === 11 ? { CPF: docAutor } : { CNPJ: docAutor }),
+    };
+
+    if (params.chave !== undefined) {
+      const chaveLimpa = params.chave.trim().replace(/^NFe/i, '');
+      if (!validarChaveAcesso(chaveLimpa)) {
+        throw new Error(
+          `Chave de acesso inválida: "${params.chave}". Informe uma chave de 44 dígitos com dígito verificador válido.`
+        );
+      }
+      distDFeInt.consChNFe = { chNFe: chaveLimpa };
+    } else if (params.nsu !== undefined) {
+      const nsuLimpo = String(params.nsu).trim().replace(/\D/g, '');
+      if (!nsuLimpo || nsuLimpo.length > 15) {
+        throw new Error('O NSU para consulta deve conter entre 1 e 15 dígitos numéricos.');
+      }
+      distDFeInt.consNSU = { NSU: nsuLimpo.padStart(15, '0') };
+    } else {
+      const ultNsuRaw =
+        params.ultimoNSU !== undefined ? String(params.ultimoNSU).trim().replace(/\D/g, '') : '0';
+      if (!ultNsuRaw || ultNsuRaw.length > 15) {
+        throw new Error('O ultimoNSU para consulta deve conter entre 1 e 15 dígitos numéricos.');
+      }
+      distDFeInt.distNSU = { ultNSU: ultNsuRaw.padStart(15, '0') };
+    }
+
+    const xmlDistStr = xmlCruFormatado(
+      create({ distDFeInt }).end({ prettyPrint: false })
+    );
+
+    const xmlBody = `<?xml version="1.0" encoding="UTF-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe"><nfeDadosMsg>${xmlDistStr}</nfeDadosMsg></nfeDistDFeInteresse></soap12:Body></soap12:Envelope>`;
+
+    const retorno = await this.enviarSoap(
+      getUrlAmbienteNacional(this.config.ambiente, 'distribuicaoDFe'),
+      xmlBody
+    );
+
+    const docRetorno = new DOMParser().parseFromString(retorno.xml, 'text/xml');
+    const ultNSU = docRetorno.getElementsByTagName('ultNSU')[0]?.textContent?.trim() || undefined;
+    const maxNSU = docRetorno.getElementsByTagName('maxNSU')[0]?.textContent?.trim() || undefined;
+
+    const docZipNodes = docRetorno.getElementsByTagName('docZip');
+    const documentos: DocumentoDistribuicaoDFe[] = [];
+
+    for (let i = 0; i < docZipNodes.length; i++) {
+      const node = docZipNodes[i];
+      if (!node) continue;
+      const nsu = node.getAttribute('NSU') ?? '';
+      const schema = node.getAttribute('schema') ?? '';
+      const conteudoBase64 = (node.textContent ?? '').trim();
+      const xml = conteudoBase64 ? descompactarDocZip(conteudoBase64) : '';
+      documentos.push({ nsu, schema, xml, conteudoBase64 });
+    }
+
+    return {
+      ...retorno,
+      ultNSU,
+      maxNSU,
+      documentos,
+    };
+  }
+
   private async enviarEvento(opcoes: {
     chaveOuId: string;
     tpEvento: '110111' | '110110' | '210200' | '210210' | '210220' | '210240';
@@ -524,7 +645,7 @@ export class NFe {
       const status = cStatNode?.textContent ? parseInt(cStatNode.textContent, 10) : 0;
       const motivo = xMotivoNode?.textContent ? xMotivoNode.textContent : 'Retorno não identificado';
 
-      // 100 = Autorizado, 101 = Cancelamento Homologado, 102 = Inutilização Homologada, 104 = Lote Processado, 107 = Serviço em Operação, 135/136 = Evento Registrado
+      // 100 = Autorizado, 101 = Cancelamento Homologado, 102 = Inutilização Homologada, 104 = Lote Processado, 107 = Serviço em Operação, 135/136 = Evento Registrado, 137/138 = Distribuição DF-e
       const sucesso =
         status === 100 ||
         status === 101 ||
@@ -532,7 +653,9 @@ export class NFe {
         status === 104 ||
         status === 107 ||
         status === 135 ||
-        status === 136;
+        status === 136 ||
+        status === 137 ||
+        status === 138;
 
       return { sucesso, status, motivo, xml: xmlStr };
     } catch (error: unknown) {
@@ -542,6 +665,14 @@ export class NFe {
       throw error;
     }
   }
+}
+
+/**
+ * Descompacta o conteúdo Base64 + GZip de uma tag `<docZip>` retornada pelo serviço NFeDistribuicaoDFe.
+ */
+export function descompactarDocZip(conteudoBase64: string): string {
+  const bufferCompactado = Buffer.from(conteudoBase64.trim(), 'base64');
+  return gunzipSync(bufferCompactado).toString('utf-8');
 }
 
 function xmlCruFormatado(xml: string) {

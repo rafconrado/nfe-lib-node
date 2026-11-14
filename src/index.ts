@@ -1,9 +1,10 @@
-export { NFe } from './NFe.js';
+export { NFe, descompactarDocZip } from './NFe.js';
 export type {
   ConfiguracaoNFe,
   AmbienteSefaz,
   ParametrosCancelamentoNFe,
   ParametrosCartaCorrecaoNFe,
+  ParametrosDistribuicaoDFe,
   ParametrosInutilizacaoNFe,
   ParametrosManifestacaoNFe,
   TipoManifestacao,
