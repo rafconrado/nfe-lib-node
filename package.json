@@ -22,7 +22,7 @@
     "prepublishOnly": "npm run build",
     "status": "node --experimental-strip-types examples/exemplo-status.ts",
     "emitir": "node --experimental-strip-types examples/exemplo-emissao.ts",
-    "test": "node --experimental-strip-types examples/exemplo-emissao.ts"
+    "test": "npm run build && node --test --experimental-strip-types tests/*.test.ts"
   },
   "keywords": [
     "nfe",
